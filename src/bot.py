@@ -50,12 +50,12 @@ class CryptoInvestBot:
                 raise ValueError(f"Unknown action type: {action.type}")
 
             result["success"] = True
-            await self.telegram.send_update(title=f"{action.name}", details=details)
+            await self.telegram.send_update(f"{action.name}: {details}")
 
         except Exception as e:
             logger.exception("Action '%s' failed: %s", action.name, e)
             result["error"] = str(e)
-            await self.telegram.send_alert(title=f"{action.name} failed", details=str(e))
+            await self.telegram.send_alert(f"{action.name}: {e}")
 
         return result
 
@@ -98,8 +98,7 @@ class CryptoInvestBot:
         logger.info("Scheduled actions:\n%s", schedule_info)
 
         await self.telegram.send_update(
-            title=f"{self.settings.bot_name} started",
-            details=f"Monitoring {len(self.settings.actions)} action(s)",
+            f"{self.settings.bot_name} started: {len(self.settings.actions)} action(s)"
         )
 
     async def run(self) -> None:
@@ -117,9 +116,6 @@ class CryptoInvestBot:
         self.scheduler.shutdown(wait=True)
         await self.kraken_client.close()
 
-        await self.telegram.send_update(
-            title=f"{self.settings.bot_name} stopped",
-            details="Graceful shutdown complete",
-        )
+        await self.telegram.send_update(f"{self.settings.bot_name} stopped")
 
         logger.info("Shutdown complete")
