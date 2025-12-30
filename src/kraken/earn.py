@@ -65,9 +65,7 @@ class KrakenEarn:
         # Return the first available strategy
         return strategies[0] if strategies else None
 
-    async def allocate(
-        self, strategy_id: str, amount: float, asset: str
-    ) -> dict[str, Any]:
+    async def allocate(self, strategy_id: str, amount: float, asset: str) -> dict[str, Any]:
         """
         Allocate funds to an earn strategy (stake).
 

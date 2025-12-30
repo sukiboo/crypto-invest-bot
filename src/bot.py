@@ -5,11 +5,11 @@ import logging
 import signal
 from typing import Any
 
-from src.schemas import ActionConfig
-from src.utils.settings import Settings
 from src.kraken import KrakenClient, KrakenEarn, KrakenTrading
 from src.notifications import TelegramNotifier
 from src.scheduler import JobScheduler
+from src.schemas import ActionConfig
+from src.utils.settings import Settings
 
 logger = logging.getLogger(__name__)
 

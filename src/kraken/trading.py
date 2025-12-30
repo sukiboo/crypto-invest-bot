@@ -68,6 +68,4 @@ class KrakenTrading:
 
     async def cancel_order(self, txid: str) -> dict[str, Any]:
         """Cancel an open order."""
-        return await self.client._request(
-            "POST", "/0/private/CancelOrder", data={"txid": txid}
-        )
+        return await self.client._request("POST", "/0/private/CancelOrder", data={"txid": txid})

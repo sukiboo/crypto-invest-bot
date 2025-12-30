@@ -46,7 +46,9 @@ class ActionConfig(BaseModel):
             if not self.pair:
                 raise ValueError(f"Action '{self.name}': 'pair' is required for order actions")
             if not self.amount or self.amount <= 0:
-                raise ValueError(f"Action '{self.name}': 'amount' must be positive for order actions")
+                raise ValueError(
+                    f"Action '{self.name}': 'amount' must be positive for order actions"
+                )
         elif self.type == "earn":
             if not self.asset:
                 raise ValueError(f"Action '{self.name}': 'asset' is required for earn actions")

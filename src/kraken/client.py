@@ -82,11 +82,10 @@ class KrakenClient:
 
     async def get_ticker(self, pair: str) -> dict[str, Any]:
         """Get ticker information for a trading pair."""
-        return await self._request(
-            "POST", "/0/public/Ticker", data={"pair": pair}, private=False
-        )
+        return await self._request("POST", "/0/public/Ticker", data={"pair": pair}, private=False)
 
 
 class KrakenAPIError(Exception):
     """Exception raised for Kraken API errors."""
+
     pass

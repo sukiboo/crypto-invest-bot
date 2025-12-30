@@ -1,1 +1,1 @@
-from src.notifications.telegram import TelegramNotifier
+from src.notifications.telegram import TelegramNotifier  # noqa: F401

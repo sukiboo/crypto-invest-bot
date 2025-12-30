@@ -37,8 +37,9 @@ class JobScheduler:
         try:
             trigger = CronTrigger.from_crontab(action.schedule)
         except ValueError as e:
-            logger.error("Invalid cron expression '%s' for action '%s': %s",
-                         action.schedule, action.name, e)
+            logger.error(
+                "Invalid cron expression '%s' for action '%s': %s", action.schedule, action.name, e
+            )
             raise
 
         job = self.scheduler.add_job(

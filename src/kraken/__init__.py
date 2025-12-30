@@ -1,3 +1,3 @@
-from src.kraken.client import KrakenClient
-from src.kraken.earn import KrakenEarn
-from src.kraken.trading import KrakenTrading
+from src.kraken.client import KrakenClient  # noqa: F401
+from src.kraken.earn import KrakenEarn  # noqa: F401
+from src.kraken.trading import KrakenTrading  # noqa: F401

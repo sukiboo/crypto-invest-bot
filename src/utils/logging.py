@@ -6,10 +6,8 @@ from pathlib import Path
 
 
 class UTCFormatter(logging.Formatter):
-    converter = time.gmtime
-
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
-        ct = self.converter(record.created)
+        ct = time.gmtime(record.created)
         if datefmt:
             return time.strftime(datefmt, ct) + "Z"
         return time.strftime("%Y-%m-%d %H:%M:%S", ct) + "Z"
@@ -37,9 +35,7 @@ def setup_logger(
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
     # Monthly log file
-    log_file = os.path.join(
-        log_dir, f"{datetime.now(timezone.utc).strftime('%Y-%m')}.log"
-    )
+    log_file = os.path.join(log_dir, f"{datetime.now(timezone.utc).strftime('%Y-%m')}.log")
 
     # Get or create logger
     logger = logging.getLogger(name)
