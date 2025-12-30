@@ -19,7 +19,6 @@ class CryptoInvestBot:
         self.settings = settings
         self._shutdown_event = asyncio.Event()
 
-        # Initialize components
         self.telegram = TelegramNotifier(
             bot_token=settings.env.telegram_bot_token,
             user_id=settings.env.telegram_user_id,
@@ -35,7 +34,6 @@ class CryptoInvestBot:
         self.scheduler = JobScheduler()
 
     async def execute_action(self, action: ActionConfig) -> dict[str, Any]:
-        """Execute a scheduled action."""
         result: dict[str, Any] = {"action": action.name, "type": action.type, "success": False}
 
         try:
@@ -62,7 +60,6 @@ class CryptoInvestBot:
         return result
 
     async def _execute_order(self, action: ActionConfig) -> dict[str, Any]:
-        """Execute a trading order."""
         assert action.pair is not None
         assert action.amount is not None
 
@@ -75,7 +72,6 @@ class CryptoInvestBot:
         raise ValueError(f"Unsupported order type: {action.order_type}")
 
     async def _execute_earn(self, action: ActionConfig) -> dict[str, Any] | None:
-        """Execute an earn/staking action."""
         assert action.asset is not None
 
         return await self.earn.stake_after_purchase(
@@ -85,47 +81,37 @@ class CryptoInvestBot:
         )
 
     def _setup_signal_handlers(self) -> None:
-        """Setup graceful shutdown handlers."""
         loop = asyncio.get_running_loop()
 
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self._shutdown_event.set)
 
     async def start(self) -> None:
-        """Start the bot and schedule all actions."""
         logger.info("Starting %s...", self.settings.bot_name)
 
-        # Schedule all actions
         for action in self.settings.actions:
             self.scheduler.add_action(action, self.execute_action)
 
-        # Start the scheduler
         self.scheduler.start()
-
-        # Log next run times
         next_runs = self.scheduler.get_next_run_times()
         schedule_info = "\n".join(f"  - {name}: {time}" for name, time in next_runs.items())
         logger.info("Scheduled actions:\n%s", schedule_info)
 
-        # Send startup notification
         await self.telegram.send_update(
             title=f"{self.settings.bot_name} started",
             details=f"Monitoring {len(self.settings.actions)} action(s)",
         )
 
     async def run(self) -> None:
-        """Run the bot until shutdown signal."""
         self._setup_signal_handlers()
         await self.start()
 
-        # Wait for shutdown signal
         logger.info("Bot running. Press Ctrl+C to stop.")
         await self._shutdown_event.wait()
 
         await self.stop()
 
     async def stop(self) -> None:
-        """Stop the bot and cleanup resources."""
         logger.info("Shutting down %s...", self.settings.bot_name)
 
         self.scheduler.shutdown(wait=True)

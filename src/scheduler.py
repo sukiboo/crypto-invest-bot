@@ -1,5 +1,3 @@
-"""Job scheduler using APScheduler with cron support."""
-
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
