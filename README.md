@@ -58,29 +58,23 @@ bot_name: crypto-invest-bot
 
 actions:
   # Order action (buy/sell)
-  - name: "Buy BTC"
+  - name: "Buy ETH"
     type: order
-    pair: XXBTZUSD
+    pair: XETHZUSD
     side: buy
-    amount: 100.00
-    schedule: "0 9 * * 0"  # every sunday at 9:00
+    amount: 10.00  # amount in corresponding currency (USD)
+    schedule: "0 0 * * *"  # every day at 00:00 UTC
 
   # Earn action (stake all available)
   - name: "Stake all ETH"
     type: earn
-    asset: ETH
-    strategy: bonded
-    amount: null           # null = stake all available
-    schedule: "0 11 * * *"
-
-  # Earn action (stake specific amount)
-  - name: "Stake 0.5 ETH"
-    type: earn
-    asset: ETH
-    strategy: flex
-    amount: 0.5
-    schedule: "0 12 1 * *"  # first day of month
+    asset: XETH  # use exact Kraken asset name
+    strategy: restaking
+    amount: null  # null = stake all available
+    schedule: "0 1 * * *"  # every day at 01:00 UTC
 ```
+
+**Note:** All schedules are in **UTC**.
 
 **Action types:**
 
@@ -91,7 +85,8 @@ actions:
 
 **Earn strategies:**
 - `flex` - Flexible, withdraw anytime
-- `bonded` - Locked staking, higher rewards
+- `bonded` - Bonded staking (~11 days lock)
+- `restaking` - Bonded restaking (~19 days lock, highest rewards)
 - `instant` - Instant rewards
 
 ### 3. Get API Keys
@@ -133,7 +128,7 @@ docker run -d --name crypto-invest-bot \
 ./deploy.sh
 ```
 
-## Cron Schedule Examples
+## Cron Schedule Examples (UTC)
 
 | Schedule | Cron Expression |
 |----------|-----------------|

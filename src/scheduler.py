@@ -14,7 +14,7 @@ class JobScheduler:
     """Async job scheduler with cron expression support."""
 
     def __init__(self) -> None:
-        self.scheduler = AsyncIOScheduler()
+        self.scheduler = AsyncIOScheduler(timezone="UTC")
         self._jobs: dict[str, str] = {}  # action name -> job id
 
     def add_action(

@@ -49,9 +49,29 @@ class KrakenEarn:
         # If a specific type is requested, try to find it
         if strategy_type:
             strategy_type_lower = strategy_type.lower()
+
+            # "restaking" = bonded with longest unbonding period
+            if strategy_type_lower == "restaking":
+                bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
+                if bonded:
+                    return max(
+                        bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
+                    )
+                logger.warning("No bonded/restaking strategies found for %s", asset)
+                return None
+
+            # Standard matching
             for strategy in strategies:
                 lock_type = strategy.get("lock_type", {}).get("type", "").lower()
-                if strategy_type_lower in lock_type or lock_type in strategy_type_lower:
+                if strategy_type_lower == lock_type:
+                    # For "bonded", pick the one with shortest unbonding (regular bonded)
+                    if strategy_type_lower == "bonded":
+                        bonded = [
+                            s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"
+                        ]
+                        return min(
+                            bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
+                        )
                     return strategy
 
             logger.warning(
@@ -150,7 +170,11 @@ class KrakenEarn:
         # If no amount specified, get available balance
         if amount is None:
             balance = await self.client.get_balance()
-            amount = float(balance.get(asset, 0))
+            if asset not in balance:
+                raise ValueError(
+                    f"Asset '{asset}' not found in balance. Available: {list(balance.keys())}"
+                )
+            amount = float(balance[asset])
             if amount <= 0:
                 logger.warning("No %s balance available to stake", asset)
                 return None

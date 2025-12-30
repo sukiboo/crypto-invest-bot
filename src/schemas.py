@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ActionType = Literal["order", "earn"]
 OrderType = Literal["market", "limit"]
 OrderSide = Literal["buy", "sell"]
-EarnLockType = Literal["flex", "bonded", "instant"]
+EarnLockType = Literal["flex", "bonded", "restaking", "instant"]
 
 
 class EnvSettings(BaseSettings):
@@ -62,3 +62,10 @@ class ActionConfig(BaseModel):
 class AppConfig(BaseModel):
     bot_name: str = "crypto-invest-bot"
     actions: list[ActionConfig] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_none_actions(cls, data: dict) -> dict:
+        if data.get("actions") is None:
+            data["actions"] = []
+        return data
