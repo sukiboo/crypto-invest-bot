@@ -16,8 +16,4 @@ COPY . .
 # Create logs directory
 RUN mkdir -p /app/logs
 
-# Run as non-root user for security
-RUN useradd --create-home appuser && chown -R appuser:appuser /app
-USER appuser
-
 CMD ["python", "app.py"]

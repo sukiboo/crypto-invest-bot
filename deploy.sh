@@ -40,6 +40,10 @@ ssh "${SERVER_USER}@${SERVER_HOST}" << EOF >/dev/null 2>&1
 set -euo pipefail
 APPDIR="\$HOME/${SERVER_PATH}"
 
+# Create logs directory with write permissions for container user
+mkdir -p "\$APPDIR/logs"
+chmod 777 "\$APPDIR/logs"
+
 # Build fresh image
 docker rm -f "${IMAGE_NAME}" >/dev/null 2>&1 || true
 cd "\$APPDIR"
