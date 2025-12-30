@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ActionType = Literal["order", "earn"]
+OrderType = Literal["market", "limit"]
+OrderSide = Literal["buy", "sell"]
+EarnLockType = Literal["flex", "bonded", "instant"]
+
+
+class EnvSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # ignore extra env vars
+    )
+    kraken_api_key: str
+    kraken_api_secret: str
+    telegram_bot_token: str
+    telegram_user_id: str
+
+
+class ActionConfig(BaseModel):
+    name: str
+    type: ActionType
+    schedule: str  # cron expression
+
+    # For order actions
+    pair: str | None = None  # exact Kraken trading pair, e.g. "XETHZUSD"
+    order_type: OrderType = "market"
+    side: OrderSide = "buy"
+
+    # For earn actions
+    asset: str | None = None  # exact Kraken asset name, e.g. "ETH", "XBT"
+    strategy: EarnLockType | None = None
+
+    # Shared (required for order, optional for earn)
+    amount: float | None = None  # None for earn = stake all available
+
+    @model_validator(mode="after")
+    def validate_action_fields(self) -> "ActionConfig":
+        if self.type == "order":
+            if not self.pair:
+                raise ValueError(f"Action '{self.name}': 'pair' is required for order actions")
+            if not self.amount or self.amount <= 0:
+                raise ValueError(f"Action '{self.name}': 'amount' must be positive for order actions")
+        elif self.type == "earn":
+            if not self.asset:
+                raise ValueError(f"Action '{self.name}': 'asset' is required for earn actions")
+            if not self.strategy:
+                raise ValueError(f"Action '{self.name}': 'strategy' is required for earn actions")
+            if self.amount is not None and self.amount <= 0:
+                raise ValueError(f"Action '{self.name}': 'amount' must be positive if specified")
+        return self
+
+
+class AppConfig(BaseModel):
+    bot_name: str = "crypto-invest-bot"
+    actions: list[ActionConfig] = Field(default_factory=list)
