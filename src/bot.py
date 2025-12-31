@@ -97,8 +97,8 @@ class CryptoInvestBot:
         schedule_info = "\n".join(f"  - {name}: {time}" for name, time in next_runs.items())
         logger.info("Scheduled actions:\n%s", schedule_info)
 
-        await self.telegram.send_update(
-            f"{self.settings.bot_name} started: {len(self.settings.actions)} action(s)"
+        await self.telegram.send_info(
+            f"{self.settings.bot_name} started with {len(self.settings.actions)} actions"
         )
 
     async def run(self) -> None:
