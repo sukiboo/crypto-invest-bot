@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -12,14 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class KrakenClient:
-    """Base client for Kraken API with HMAC-SHA512 authentication."""
-
     BASE_URL = "https://api.kraken.com"
 
     def __init__(self, api_key: str, api_secret: str) -> None:
         self.api_key = api_key
         self.api_secret = api_secret
         self._session: aiohttp.ClientSession | None = None
+        self._lock = asyncio.Lock()  # Serialize requests to avoid nonce conflicts
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create the aiohttp session."""
@@ -48,20 +48,22 @@ class KrakenClient:
         data: dict | None = None,
         private: bool = True,
     ) -> dict[str, Any]:
-        """Make an authenticated request to the Kraken API."""
         url = f"{self.BASE_URL}{endpoint}"
         headers = {}
         data = data or {}
 
+        # Lock for private requests to avoid nonce conflicts
         if private:
-            nonce = int(time.time() * 1000)
-            data["nonce"] = nonce
-            headers["API-Key"] = self.api_key
-            headers["API-Sign"] = self._generate_signature(endpoint, data, nonce)
-
-        session = await self._get_session()
+            await self._lock.acquire()
 
         try:
+            if private:
+                nonce = int(time.time() * 1000)
+                data["nonce"] = nonce
+                headers["API-Key"] = self.api_key
+                headers["API-Sign"] = self._generate_signature(endpoint, data, nonce)
+
+            session = await self._get_session()
             async with session.post(url, data=data, headers=headers) as response:
                 result = await response.json()
 
@@ -75,6 +77,9 @@ class KrakenClient:
         except aiohttp.ClientError as e:
             logger.error("HTTP request failed: %s", e)
             raise KrakenAPIError(f"HTTP request failed: {e}") from e
+        finally:
+            if private:
+                self._lock.release()
 
     async def get_balance(self) -> dict[str, str]:
         """Get account balance."""

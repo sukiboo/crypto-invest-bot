@@ -60,16 +60,16 @@ actions:
   # Order action (buy/sell)
   - name: "Buy ETH"
     type: order
-    pair: XETHZUSD
-    side: buy
+    pair: XETHZUSD  # use Kraken pair name
+    side: buy  # buy | sell
     amount: 10.00  # amount in corresponding currency (USD)
     schedule: "0 0 * * *"  # every day at 00:00 UTC
 
   # Earn action (stake all available)
   - name: "Stake all ETH"
     type: earn
-    asset: XETH  # use exact Kraken asset name
-    strategy: restaking
+    asset: XETH  # use Kraken asset name
+    strategy: restaking  # instant | flex | bonded | restaking
     amount: null  # null = stake all available
     schedule: "0 1 * * *"  # every day at 01:00 UTC
 ```

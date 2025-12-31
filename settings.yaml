@@ -6,25 +6,25 @@ actions:
     pair: XETHZUSD
     side: buy
     amount: 10.00
-    schedule: "0 2 * * *"  # every day at 21:00 ET
+    schedule: "59 4 * * *"  # every day at 23:59 ET
 
   - name: "Stake all ETH"
     type: earn
     asset: XETH
-    strategy: bonded  # flex | bonded | instant
-    amount: null  # null = stake all available
-    schedule: "0 3 * * *"  # every day at 22:00 ET
+    strategy: restaking
+    amount: null
+    schedule: "0 5 * * *"  # every day at 00:00 ET
 
   - name: "Buy SOL"
     type: order
     pair: SOLUSD
     side: buy
     amount: 10.00
-    schedule: "0 2 * * *"  # every day at 21:00 ET
+    schedule: "59 4 * * *"  # every day at 23:59 ET
 
   - name: "Stake all SOL"
     type: earn
     asset: SOL
-    strategy: bonded  # flex | bonded | instant
-    amount: null  # null = stake all available
-    schedule: "0 3 * * *"  # every day at 22:00 ET
+    strategy: restaking
+    amount: null
+    schedule: "0 5 * * *"  # every day at 00:00 ET
