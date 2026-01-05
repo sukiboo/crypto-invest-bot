@@ -69,3 +69,19 @@ class KrakenTrading:
     async def cancel_order(self, txid: str) -> dict[str, Any]:
         """Cancel an open order."""
         return await self.client._request("POST", "/0/private/CancelOrder", data={"txid": txid})
+
+    async def query_orders(self, txid: str | list[str]) -> dict[str, Any]:
+        """
+        Query order details by transaction ID(s).
+
+        Args:
+            txid: Single transaction ID or list of transaction IDs
+
+        Returns:
+            Order details from Kraken API
+        """
+        return await self.client._request(
+            "POST",
+            "/0/private/QueryOrders",
+            data={"txid": ",".join(txid) if isinstance(txid, list) else txid},
+        )

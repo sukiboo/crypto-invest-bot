@@ -41,7 +41,7 @@ class CryptoInvestBot:
 
             if action.type == "order":
                 result["data"] = await self._execute_order(action)
-                details = f"{action.side} ${action.amount} on {action.pair}"
+                details = await self._format_order_details(action, result["data"])
             elif action.type == "earn":
                 result["data"] = await self._execute_earn(action)
                 amount_str = f"{action.amount}" if action.amount else "all"
@@ -70,6 +70,21 @@ class CryptoInvestBot:
                 amount=action.amount,
             )
         raise ValueError(f"Unsupported order type: {action.order_type}")
+
+    async def _format_order_details(
+        self, action: ActionConfig, order_result: dict[str, Any]
+    ) -> str:
+        """Format order details for notification, including purchased amount."""
+        try:
+            txids = order_result.get("txid", [])
+            order_details = await self.trading.query_orders(txids[0])
+            order_info = order_details.get(txids[0], {})
+            volume = order_info.get("vol", "")
+            # Format: "buy 0.5 of XETHZUSD for $1500.00"
+            return f"{action.side} {volume} of {action.pair} for ${action.amount:.2f}"
+        except Exception as e:
+            logger.warning("Could not fetch order details: %s", e)
+            return f"{action.side} ${action.amount:.2f} of {action.pair}"
 
     async def _execute_earn(self, action: ActionConfig) -> dict[str, Any] | None:
         assert action.asset is not None

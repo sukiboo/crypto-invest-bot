@@ -60,7 +60,7 @@ cp .env.example .env
 
 **Get API Keys:**
 
-- **Kraken:** [Create API key](https://www.kraken.com/u/security/api) with permissions: Query Funds, Create & Modify Orders, Earn Funds
+- **Kraken:** [Create API key](https://www.kraken.com/u/security/api) with permissions: `Query Funds`, `Create & Modify Orders`, `Earn Funds`
 - **Telegram:** Message [@BotFather](https://t.me/BotFather) to create a bot, get your user ID from [@userinfobot](https://t.me/userinfobot)
 
 ## Configure
