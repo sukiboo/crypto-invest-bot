@@ -38,20 +38,34 @@ crypto-invest-bot/
 
 ## Setup
 
-### 1. Clone and configure
+**Prerequisites:** pyenv and pyenv-virtualenv (install via `brew install pyenv pyenv-virtualenv` on macOS)
 
 ```bash
+# 1. Clone repository
 git clone git@github.com:sukiboo/crypto-invest-bot.git
 cd crypto-invest-bot
 
-# Copy and edit environment variables
+# 2. Install Python and create virtual environment
+pyenv install 3.12.11
+pyenv virtualenv 3.12.11 crypto-invest-bot
+pyenv local crypto-invest-bot
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys (see below)
 ```
 
-### 2. Configure actions in `settings.yaml`
+**Get API Keys:**
 
-Use exact Kraken trading pairs and asset names (see [Kraken Asset Pairs](https://support.kraken.com/hc/en-us/articles/360001185506)):
+- **Kraken:** [Create API key](https://www.kraken.com/u/security/api) with permissions: Query Funds, Create & Modify Orders, Earn Funds
+- **Telegram:** Message [@BotFather](https://t.me/BotFather) to create a bot, get your user ID from [@userinfobot](https://t.me/userinfobot)
+
+## Configure
+
+Edit `settings.yaml` with your actions. Use exact Kraken trading pairs and asset names (see [Kraken Asset Pairs](https://support.kraken.com/hc/en-us/articles/360001185506)):
 
 ```yaml
 bot_name: crypto-invest-bot
@@ -69,7 +83,7 @@ actions:
   - name: "Stake all ETH"
     type: earn
     asset: XETH  # use Kraken asset name
-    strategy: restaking  # instant | flex | bonded | restaking
+    strategy: restaked  # flexible | bonded | restaked
     amount: null  # null = stake all available
     schedule: "0 1 * * *"  # every day at 01:00 UTC
 ```
@@ -84,31 +98,30 @@ actions:
 | `earn` | `asset`, `strategy` | `amount` (default: null = all) |
 
 **Earn strategies:**
-- `flex` - Flexible, withdraw anytime
-- `bonded` - Bonded staking (~11 days lock)
-- `restaking` - Bonded restaking (~19 days lock, highest rewards)
-- `instant` - Instant rewards
 
-### 3. Get API Keys
+Available strategies depend on the asset and are determined by querying Kraken's API.
+The bot maps strategy names to Kraken's lock types:
 
-**Kraken API:**
-1. Go to [Kraken Security Settings](https://www.kraken.com/u/security/api)
-2. Create a new API key with permissions: Query Funds, Create & Modify Orders, Earn Funds
-3. Copy the key and secret to `.env`
+- `flexible` -- **Flexible staking**: Maps directly to Kraken's "flexible" staking strategy. No lock period, withdraw anytime. Lower rewards but maximum liquidity. Also known as "Auto Earn" or "Flexible Opt-In Rewards" in Kraken's UI.
+- `bonded` -- **Bonded staking**: Maps to Kraken's "bonded" staking strategy with the shortest unbonding period. For most coins, this is the only bonded option available. Assets are locked during the bonding period, then have an unbonding period before funds become available. Higher rewards than `flexible`.
+- `restaked` -- **Bonded restaking**: Maps to Kraken's "bonded" staking strategy with the longest unbonding period. For most coins, this will be the same strategy as `bonded` (since they only have one bonded option). For assets like ETH that support restaking, this selects the restaking option with the longest lock period. Highest rewards available, but longest commitment with extended unbonding periods.
 
-**Telegram Bot:**
-1. Message [@BotFather](https://t.me/BotFather) and create a new bot
-2. Copy the bot token to `.env`
-3. Message your bot, then get your user ID from [@userinfobot](https://t.me/userinfobot)
-4. Add your user ID to `.env`
+**Note:** Lock periods and unbonding periods vary by asset. Most coins only offer `flexible` and `bonded` options. Only certain assets like ETH offer a separate restaking option. Check Kraken's [Earn documentation](https://support.kraken.com/hc/articles/360044886311-overview-of-opt-in-rewards-on-kraken) for specific details per asset.
 
 ## Running
 
 ### Local Development
 
+Make sure you're in the project directory (pyenv will auto-activate the virtual environment):
+
 ```bash
-pip install -r requirements.txt
+cd crypto-invest-bot
 python app.py
+```
+
+If the virtual environment isn't active, you can manually activate it:
+```bash
+pyenv activate crypto-invest-bot
 ```
 
 ### Docker (Local)
@@ -127,17 +140,3 @@ docker run -d --name crypto-invest-bot \
 # Ensure .env has SERVER_USER, SERVER_HOST, SERVER_PATH set
 ./deploy.sh
 ```
-
-## Cron Schedule Examples (UTC)
-
-| Schedule | Cron Expression |
-|----------|-----------------|
-| Every day at 9:00 | `0 9 * * *` |
-| Every Sunday at 10:00 | `0 10 * * 0` |
-| Every Monday and Friday at 8:30 | `30 8 * * 1,5` |
-| First day of month at 12:00 | `0 12 1 * *` |
-| Every 6 hours | `0 */6 * * *` |
-
-## License
-
-MIT

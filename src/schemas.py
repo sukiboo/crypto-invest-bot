@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ActionType = Literal["order", "earn"]
 OrderType = Literal["market", "limit"]
 OrderSide = Literal["buy", "sell"]
-EarnLockType = Literal["flex", "bonded", "restaking", "instant"]
+EarnLockType = Literal["flexible", "bonded", "restaked"]
 
 
 class EnvSettings(BaseSettings):

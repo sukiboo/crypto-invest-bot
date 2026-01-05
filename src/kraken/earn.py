@@ -50,29 +50,35 @@ class KrakenEarn:
         if strategy_type:
             strategy_type_lower = strategy_type.lower()
 
-            # "restaking" = bonded with longest unbonding period
-            if strategy_type_lower == "restaking":
+            # "restaked" = bonded with longest unbonding period
+            # For most coins this will be the same as "bonded", but for ETH it's the restaking option
+            if strategy_type_lower == "restaked":
                 bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
                 if bonded:
                     return max(
                         bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
                     )
-                logger.warning("No bonded/restaking strategies found for %s", asset)
+                logger.warning("No bonded strategies found for %s", asset)
                 return None
 
-            # Standard matching
-            for strategy in strategies:
-                lock_type = strategy.get("lock_type", {}).get("type", "").lower()
-                if strategy_type_lower == lock_type:
-                    # For "bonded", pick the one with shortest unbonding (regular bonded)
-                    if strategy_type_lower == "bonded":
-                        bonded = [
-                            s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"
-                        ]
-                        return min(
-                            bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
-                        )
-                    return strategy
+            # "bonded" = bonded with shortest unbonding period (most coins only have one bonded option)
+            if strategy_type_lower == "bonded":
+                bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
+                if bonded:
+                    return min(
+                        bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
+                    )
+                logger.warning("No bonded strategies found for %s", asset)
+                return None
+
+            # "flexible" maps directly to Kraken's "flexible" lock type
+            if strategy_type_lower == "flexible":
+                for strategy in strategies:
+                    lock_type = strategy.get("lock_type", {}).get("type", "").lower()
+                    if lock_type == "flexible":
+                        return strategy
+                logger.warning("No flexible strategies found for %s", asset)
+                return None
 
             logger.warning(
                 "Strategy type '%s' not found for %s, available: %s",

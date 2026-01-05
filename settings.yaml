@@ -11,7 +11,7 @@ actions:
   - name: "Stake all ETH"
     type: earn
     asset: XETH
-    strategy: restaking
+    strategy: restaked
     amount: null
     schedule: "0 5 * * *"  # every day at 00:00 ET
 
@@ -25,6 +25,6 @@ actions:
   - name: "Stake all SOL"
     type: earn
     asset: SOL
-    strategy: restaking
+    strategy: bonded
     amount: null
     schedule: "0 5 * * *"  # every day at 00:00 ET
