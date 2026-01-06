@@ -79,9 +79,10 @@ class CryptoInvestBot:
             txids = order_result.get("txid", [])
             order_details = await self.trading.query_orders(txids[0])
             order_info = order_details.get(txids[0], {})
-            volume = order_info.get("vol", "")
+            # vol_exec is the amount of base currency bought/sold
+            vol_exec = order_info.get("vol_exec", "")
             # Format: "buy 0.5 of XETHZUSD for $1500.00"
-            return f"{action.side} {volume} of {action.pair} for ${action.amount:.2f}"
+            return f"{action.side} {vol_exec} of {action.pair} for ${action.amount:.2f}"
         except Exception as e:
             logger.warning("Could not fetch order details: %s", e)
             return f"{action.side} ${action.amount:.2f} of {action.pair}"
