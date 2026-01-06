@@ -1,4 +1,4 @@
-# crypto-invest-bot
+# crypto-invest-bot 🗓️🐙📨
 
 Automated scheduled crypto investing on Kraken with Telegram notifications.
 
@@ -94,8 +94,8 @@ actions:
 
 | Type | Required fields | Optional |
 |------|-----------------|----------|
-| `order` | `pair`, `side`, `amount` | `order_type` (default: market) |
-| `earn` | `asset`, `strategy` | `amount` (default: null = all) |
+| `order` | `pair`, `side`, `amount` | `order_type` (default: `market`) |
+| `earn` | `asset`, `strategy` | `amount` (default: `null` = all) |
 
 **Earn strategies:**
 
@@ -106,7 +106,7 @@ The bot maps strategy names to Kraken's lock types:
 - `bonded` -- **Bonded staking**: Maps to Kraken's "bonded" staking strategy with the shortest unbonding period. For most coins, this is the only bonded option available. Assets are locked during the bonding period, then have an unbonding period before funds become available. Higher rewards than `flexible`.
 - `restaked` -- **Bonded restaking**: Maps to Kraken's "bonded" staking strategy with the longest unbonding period. For most coins, this will be the same strategy as `bonded` (since they only have one bonded option). For assets like ETH that support restaking, this selects the restaking option with the longest lock period. Highest rewards available, but longest commitment with extended unbonding periods.
 
-**Note:** Lock periods and unbonding periods vary by asset. Most coins only offer `flexible` and `bonded` options. Only certain assets like ETH offer a separate restaking option. Check Kraken's [Earn documentation](https://support.kraken.com/hc/articles/360044886311-overview-of-opt-in-rewards-on-kraken) for specific details per asset.
+**Note:** Lock periods and unbonding periods vary by asset. Most coins only offer `flexible` and `bonded` options. Only certain assets like ETH offer a separate restaking option. Check Kraken's [Earn documentation](https://support.kraken.com/hc/articles/360044886311-overview-of-opt-in-rewards-on-kraken) for specific details per asset. For most assets `restaked` will map to `bonded`.
 
 ## Running
 
