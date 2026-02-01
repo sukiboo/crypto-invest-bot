@@ -73,47 +73,10 @@ class CryptoInvestBot:
         self, action: ActionConfig, order_result: dict[str, Any]
     ) -> str:
         txid = order_result.get("txid", [])[0]
-        vol_exec, price_str = await self._get_order_execution_details(txid)
-        return (
-            f"{action.side} {vol_exec} of {action.pair} " f"for ${action.amount:.2f} @ {price_str}"
-        )
-
-    async def _get_order_execution_details(
-        self, txid: str, max_attempts: int = 5, delay: float = 1.0
-    ) -> tuple[str, str]:
-        order_info: dict[str, Any] = {}
-
-        for attempt in range(max_attempts):
-            try:
-                order_details = await self.trading.query_orders(txid)
-                order_info = order_details.get(txid, {})
-                if order_info.get("status") == "closed":
-                    break
-                logger.debug(
-                    "Order %s status: %s (%d/%d)",
-                    txid,
-                    order_info.get("status"),
-                    attempt + 1,
-                    max_attempts,
-                )
-            except Exception as e:
-                logger.warning("Failed to query order %s: %s", txid, e)
-            await asyncio.sleep(delay)
-
-        vol_exec = order_info.get("vol_exec", "")
-        price = order_info.get("price", "")
-
-        if not vol_exec or vol_exec in ("0", "0.00000000"):
-            logger.warning("Order %s: vol_exec not available", txid)
-            vol_exec = "??"
-
-        if not price or float(price) == 0:
-            logger.warning("Order %s: price not available", txid)
-            price_str = "??"
-        else:
-            price_str = f"${float(price):.2f}"
-
-        return vol_exec, price_str
+        vol_exec, price = await self.trading.get_filled_order_details(txid)
+        vol_str = vol_exec or "??"
+        price_str = f"${price:.2f}" if price else "??"
+        return f"{action.side} {vol_str} of {action.pair} for ${action.amount:.2f} @ {price_str}"
 
     async def _execute_earn(self, action: ActionConfig) -> dict[str, Any] | None:
         assert action.asset is not None

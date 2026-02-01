@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Literal
 
@@ -85,3 +86,39 @@ class KrakenTrading:
             "/0/private/QueryOrders",
             data={"txid": ",".join(txid) if isinstance(txid, list) else txid},
         )
+
+    async def get_filled_order_details(
+        self, txid: str, max_attempts: int = 5, delay: float = 1.0
+    ) -> tuple[str | None, float | None]:
+        """Poll until order is filled, returns (vol_exec, price) or None for unavailable values."""
+        order_info: dict[str, Any] = {}
+
+        for attempt in range(max_attempts):
+            try:
+                order_details = await self.query_orders(txid)
+                order_info = order_details.get(txid, {})
+                if order_info.get("status") == "closed":
+                    break
+                logger.debug(
+                    "Order %s status: %s (%d/%d)",
+                    txid,
+                    order_info.get("status"),
+                    attempt + 1,
+                    max_attempts,
+                )
+            except Exception as e:
+                logger.warning("Failed to query order %s: %s", txid, e)
+            await asyncio.sleep(delay)
+
+        vol_exec = order_info.get("vol_exec")
+        price = order_info.get("price")
+
+        vol_exec_result = None if not vol_exec or vol_exec in ("0", "0.00000000") else vol_exec
+        price_result = None if not price or float(price) == 0 else float(price)
+
+        if vol_exec_result is None:
+            logger.warning("Order %s: vol_exec not available", txid)
+        if price_result is None:
+            logger.warning("Order %s: price not available", txid)
+
+        return vol_exec_result, price_result

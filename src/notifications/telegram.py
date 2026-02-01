@@ -1,4 +1,5 @@
 import functools
+import html
 import logging
 from typing import Any, Callable, TypeVar
 
@@ -26,12 +27,20 @@ class TelegramNotifier:
         self, message: str, silent: bool = False, monospace: bool = False
     ) -> bool:
         try:
-            text = f"`{message}`" if monospace else message
+            if monospace:
+                escaped = html.escape(message)
+                for sep in ("\r\n", "\n", "\r"):
+                    escaped = escaped.replace(sep, "<br/>")
+                text = f"<code>{escaped}</code>"
+                parse_mode = "HTML"
+            else:
+                text = message
+                parse_mode = None
             await self.bot.send_message(
                 chat_id=self.user_id,
                 text=text,
                 disable_notification=silent,
-                parse_mode="Markdown" if monospace else None,
+                parse_mode=parse_mode,
             )
             return True
         except TelegramError as e:
