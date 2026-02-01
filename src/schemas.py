@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
+
+PAIR_PATTERN = re.compile(r"^[A-Z0-9]{5,12}$")
+ASSET_PATTERN = re.compile(r"^[A-Z0-9]{2,6}$")
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ActionType = Literal["order", "earn"]
@@ -45,6 +49,8 @@ class ActionConfig(BaseModel):
         if self.type == "order":
             if not self.pair:
                 raise ValueError(f"Action '{self.name}': 'pair' is required for order actions")
+            if not PAIR_PATTERN.match(self.pair):
+                raise ValueError(f"Action '{self.name}': invalid pair format '{self.pair}'")
             if not self.amount or self.amount <= 0:
                 raise ValueError(
                     f"Action '{self.name}': 'amount' must be positive for order actions"
@@ -52,6 +58,8 @@ class ActionConfig(BaseModel):
         elif self.type == "earn":
             if not self.asset:
                 raise ValueError(f"Action '{self.name}': 'asset' is required for earn actions")
+            if not ASSET_PATTERN.match(self.asset):
+                raise ValueError(f"Action '{self.name}': invalid asset format '{self.asset}'")
             if not self.strategy:
                 raise ValueError(f"Action '{self.name}': 'strategy' is required for earn actions")
             if self.amount is not None and self.amount <= 0:

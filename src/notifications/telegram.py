@@ -1,14 +1,11 @@
-import functools
 import html
 import logging
-from typing import Any, Callable, TypeVar
 
 from telegram import Bot
 from telegram.error import TelegramError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 logger = logging.getLogger(__name__)
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 class TelegramNotifier:
@@ -23,25 +20,35 @@ class TelegramNotifier:
         self.bot = Bot(token=bot_token)
         self.user_id = user_id
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+        retry=retry_if_exception_type(TelegramError),
+        reraise=True,
+    )
+    async def _send(self, text: str, silent: bool, parse_mode: str | None) -> None:
+        await self.bot.send_message(
+            chat_id=self.user_id,
+            text=text,
+            disable_notification=silent,
+            parse_mode=parse_mode,
+        )
+
     async def send_message(
         self, message: str, silent: bool = False, monospace: bool = False
     ) -> bool:
+        if monospace:
+            escaped = html.escape(message)
+            for sep in ("\r\n", "\n", "\r"):
+                escaped = escaped.replace(sep, "<br/>")
+            text = f"<code>{escaped}</code>"
+            parse_mode = "HTML"
+        else:
+            text = message
+            parse_mode = None
+
         try:
-            if monospace:
-                escaped = html.escape(message)
-                for sep in ("\r\n", "\n", "\r"):
-                    escaped = escaped.replace(sep, "<br/>")
-                text = f"<code>{escaped}</code>"
-                parse_mode = "HTML"
-            else:
-                text = message
-                parse_mode = None
-            await self.bot.send_message(
-                chat_id=self.user_id,
-                text=text,
-                disable_notification=silent,
-                parse_mode=parse_mode,
-            )
+            await self._send(text, silent, parse_mode)
             return True
         except TelegramError as e:
             logger.error("Failed to send Telegram message: %s", e)
@@ -56,31 +63,4 @@ class TelegramNotifier:
         return await self.send_message(f"🔆 {message}", silent=False, monospace=True)
 
     async def send_alert(self, message: str) -> bool:
-        """Non-silent notification for errors."""
         return await self.send_message(f"❌ {message}", silent=False, monospace=True)
-
-
-def notify_on_error(notifier: TelegramNotifier) -> Callable[[F], F]:
-    """
-    Decorator factory to catch exceptions and send Telegram alerts.
-
-    Usage:
-        @notify_on_error(telegram_notifier)
-        async def my_function():
-            ...
-    """
-
-    def decorator(func: F) -> F:
-        @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                error_msg = f"Error in {func.__name__}: {type(e).__name__}: {e}"
-                logger.exception(error_msg)
-                await notifier.send_alert(f"Bot Error: {error_msg}")
-                raise
-
-        return wrapper  # type: ignore
-
-    return decorator

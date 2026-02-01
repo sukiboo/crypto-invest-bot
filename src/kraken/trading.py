@@ -88,9 +88,14 @@ class KrakenTrading:
         )
 
     async def get_filled_order_details(
-        self, txid: str, max_attempts: int = 5, delay: float = 1.0
+        self, txid: str | list[str], max_attempts: int = 5, delay: float = 1.0
     ) -> tuple[str | None, float | None]:
-        """Poll until order is filled, returns (vol_exec, price) or None for unavailable values."""
+        if isinstance(txid, list):
+            if not txid:
+                return None, None
+            else:
+                txid = txid[0]
+
         order_info: dict[str, Any] = {}
 
         for attempt in range(max_attempts):

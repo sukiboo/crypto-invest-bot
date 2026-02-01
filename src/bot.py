@@ -58,32 +58,26 @@ class CryptoInvestBot:
         return result
 
     async def _execute_order(self, action: ActionConfig) -> dict[str, Any]:
-        assert action.pair is not None
-        assert action.amount is not None
-
         if action.order_type == "market":
             return await self.trading.place_market_order(
-                pair=action.pair,
+                pair=action.pair,  # type: ignore[arg-type]
                 side=action.side,
-                amount=action.amount,
+                amount=action.amount,  # type: ignore[arg-type]
             )
         raise ValueError(f"Unsupported order type: {action.order_type}")
 
     async def _format_order_details(
         self, action: ActionConfig, order_result: dict[str, Any]
     ) -> str:
-        txid = order_result.get("txid", [])[0]
-        vol_exec, price = await self.trading.get_filled_order_details(txid)
+        vol_exec, price = await self.trading.get_filled_order_details(order_result.get("txid", []))
         vol_str = vol_exec or "??"
         price_str = f"${price:.2f}" if price else "??"
         return f"{action.side} {vol_str} of {action.pair} for ${action.amount:.2f} @ {price_str}"
 
     async def _execute_earn(self, action: ActionConfig) -> dict[str, Any] | None:
-        assert action.asset is not None
-
         return await self.earn.stake_after_purchase(
-            asset=action.asset,
-            amount=action.amount,  # None = stake all available
+            asset=action.asset,  # type: ignore[arg-type]
+            amount=action.amount,
             strategy_type=action.strategy,
         )
 
@@ -120,7 +114,7 @@ class CryptoInvestBot:
     async def stop(self) -> None:
         logger.info("Shutting down %s...", self.settings.bot_name)
 
-        self.scheduler.shutdown(wait=True)
+        self.scheduler.shutdown(wait=False)
         await self.kraken_client.close()
 
         await self.telegram.send_update(f"{self.settings.bot_name} stopped")

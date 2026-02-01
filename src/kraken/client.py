@@ -47,24 +47,24 @@ class KrakenClient:
         endpoint: str,
         data: dict | None = None,
         private: bool = True,
+        timeout: float = 30.0,
     ) -> dict[str, Any]:
         url = f"{self.BASE_URL}{endpoint}"
-        headers = {}
-        data = data or {}
+        headers: dict[str, str] = {}
+        request_data = data.copy() if data else {}
 
-        # Lock for private requests to avoid nonce conflicts
-        if private:
-            await self._lock.acquire()
-
-        try:
+        async def do_request() -> dict[str, Any]:
             if private:
                 nonce = int(time.time() * 1000)
-                data["nonce"] = nonce
+                request_data["nonce"] = nonce
                 headers["API-Key"] = self.api_key
-                headers["API-Sign"] = self._generate_signature(endpoint, data, nonce)
+                headers["API-Sign"] = self._generate_signature(endpoint, request_data, nonce)
 
             session = await self._get_session()
-            async with session.post(url, data=data, headers=headers) as response:
+            client_timeout = aiohttp.ClientTimeout(total=timeout)
+            async with session.post(
+                url, data=request_data, headers=headers, timeout=client_timeout
+            ) as response:
                 result = await response.json()
 
                 if result.get("error"):
@@ -74,12 +74,14 @@ class KrakenClient:
 
                 return result.get("result", {})
 
+        try:
+            if private:
+                async with self._lock:
+                    return await do_request()
+            return await do_request()
         except aiohttp.ClientError as e:
             logger.error("HTTP request failed: %s", e)
             raise KrakenAPIError(f"HTTP request failed: {e}") from e
-        finally:
-            if private:
-                self._lock.release()
 
     async def get_balance(self) -> dict[str, str]:
         """Get account balance."""
