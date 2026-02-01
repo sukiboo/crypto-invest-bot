@@ -2,9 +2,15 @@
 set -euo pipefail
 
 ENV_LOCAL_PATH="./.env"
+SETTINGS_LOCAL_PATH="./settings.yaml"
 
 if [[ ! -f "$ENV_LOCAL_PATH" ]]; then
   echo "ERROR: $ENV_LOCAL_PATH not found."
+  exit 1
+fi
+
+if [[ ! -f "$SETTINGS_LOCAL_PATH" ]]; then
+  echo "ERROR: $SETTINGS_LOCAL_PATH not found."
   exit 1
 fi
 
@@ -46,8 +52,9 @@ else
 fi
 EOF
 
-echo "==> 🔑 Copy \`.env\` to server"
+echo "==> 🔑 Copy config files to server"
 scp "$ENV_LOCAL_PATH" "${SERVER_USER}@${SERVER_HOST}:~/${SERVER_PATH}/.env" >/dev/null 2>&1
+scp "$SETTINGS_LOCAL_PATH" "${SERVER_USER}@${SERVER_HOST}:~/${SERVER_PATH}/settings.yaml" >/dev/null 2>&1
 ssh "${SERVER_USER}@${SERVER_HOST}" "chmod 600 ~/${SERVER_PATH}/.env" >/dev/null 2>&1
 
 echo "==> 🚀 Build and run the container"

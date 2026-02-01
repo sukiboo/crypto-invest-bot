@@ -1,0 +1,40 @@
+bot_name: crypto-invest-bot
+
+actions:
+  # BTC - twice daily DCA
+  - name: "Buy BTC"
+    type: order               # order = buy/sell action
+    pair: BTCUSD              # Kraken trading pair (BTCUSD or XBTZUSD both work)
+    side: buy                 # buy | sell
+    amount: 10.00             # amount in quote currency (USD)
+    schedule: "0 8,20 * * *"  # cron expression in UTC (8:00 AM and 8:00 PM daily)
+
+  # ETH - daily purchase + auto-stake
+  - name: "Buy ETH"
+    type: order
+    pair: ETHUSD
+    side: buy
+    amount: 15.00
+    schedule: "0 12 * * *"  # noon daily
+
+  - name: "Stake ETH"
+    type: earn              # earn = staking action
+    asset: ETH              # Kraken asset name
+    strategy: restaked      # flexible | bonded | restaked
+    amount: null            # null = stake all available balance
+    schedule: "1 12 * * *"  # 1 minute after purchase
+
+  # SOL - weekly purchase + partial stake
+  - name: "Buy SOL"
+    type: order
+    pair: SOLUSD
+    side: buy
+    amount: 50.00
+    schedule: "0 9 * * 1"  # every Monday at 9:00 AM
+
+  - name: "Stake SOL"
+    type: earn
+    asset: SOL
+    strategy: bonded       # bonded = higher yield, unbonding period
+    amount: 5.0            # stake specific amount (not all)
+    schedule: "1 9 * * 1"  # 1 minute after purchase

@@ -14,7 +14,7 @@ class TestPlaceMarketOrder:
     async def test_buy_order_sets_viqc_flag(self, trading, mock_kraken_client):
         mock_kraken_client._request.return_value = {"txid": ["ABC123"]}
 
-        await trading.place_market_order(pair="XETHZUSD", side="buy", amount=100.0)
+        await trading.place_market_order(pair="ETHUSD", side="buy", amount=100.0)
 
         call_args = mock_kraken_client._request.call_args
         data = call_args.kwargs["data"]
@@ -24,7 +24,7 @@ class TestPlaceMarketOrder:
     async def test_sell_order_no_viqc_flag(self, trading, mock_kraken_client):
         mock_kraken_client._request.return_value = {"txid": ["ABC123"]}
 
-        await trading.place_market_order(pair="XETHZUSD", side="sell", amount=0.5)
+        await trading.place_market_order(pair="ETHUSD", side="sell", amount=0.5)
 
         call_args = mock_kraken_client._request.call_args
         data = call_args.kwargs["data"]

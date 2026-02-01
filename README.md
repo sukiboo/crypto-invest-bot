@@ -14,7 +14,8 @@ Automated scheduled crypto investing on Kraken with Telegram notifications.
 ```
 crypto-invest-bot/
 ├── app.py                 # Entry point
-├── settings.yaml          # Bot configuration (actions, schedules)
+├── settings.yaml          # Schedule configuration (not committed)
+├── settings.example.yaml  # Template for schedule configuration
 ├── .env                   # Secrets (not committed)
 ├── .env.example           # Template for secrets
 ├── requirements.txt
@@ -53,9 +54,10 @@ pyenv local crypto-invest-bot
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Configure environment variables
+# 4. Configure environment and settings
 cp .env.example .env
-# Edit .env with your API keys (see below)
+cp settings.example.yaml settings.yaml
+# Edit .env with your API keys and settings.yaml with your actions
 ```
 
 **Get API Keys:**
@@ -65,30 +67,44 @@ cp .env.example .env
 
 ## Configure
 
-Edit `settings.yaml` with your actions. Use exact Kraken trading pairs and asset names (see [Kraken Asset Pairs](https://support.kraken.com/hc/en-us/articles/360001185506)):
+Copy and edit `settings.example.yaml`:
+
+```bash
+cp settings.example.yaml settings.yaml
+```
+
+Example configuration:
 
 ```yaml
 bot_name: crypto-invest-bot
 
 actions:
-  # Order action (buy/sell)
-  - name: "Buy ETH"
+  # Daily DCA - buy every day at noon UTC
+  - name: "Daily BTC"
     type: order
-    pair: XETHZUSD  # use Kraken pair name
-    side: buy  # buy | sell
-    amount: 10.00  # amount in corresponding currency (USD)
-    schedule: "0 0 * * *"  # every day at 00:00 UTC
+    pair: BTCUSD
+    side: buy
+    amount: 20.00
+    schedule: "0 12 * * *"
 
-  # Earn action (stake all available)
-  - name: "Stake all ETH"
+  # Weekly buy - every Monday
+  - name: "Weekly SOL"
+    type: order
+    pair: SOLUSD
+    side: buy
+    amount: 50.00
+    schedule: "0 9 * * 1"
+
+  # Auto-stake after purchase
+  - name: "Stake ETH"
     type: earn
-    asset: XETH  # use Kraken asset name
-    strategy: restaked  # flexible | bonded | restaked
+    asset: ETH
+    strategy: restaked
     amount: null  # null = stake all available
-    schedule: "0 1 * * *"  # every day at 01:00 UTC
+    schedule: "1 12 * * *"
 ```
 
-**Note:** All schedules are in **UTC**.
+**Note:** All schedules are in **UTC**. Both `ETHUSD` and `XETHZUSD` formats work for pairs.
 
 **Action types:**
 

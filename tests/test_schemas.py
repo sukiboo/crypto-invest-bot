@@ -10,10 +10,10 @@ class TestActionConfig:
             name="Buy ETH",
             type="order",
             schedule="0 12 * * *",
-            pair="XETHZUSD",
+            pair="ETHUSD",
             amount=100.0,
         )
-        assert action.pair == "XETHZUSD"
+        assert action.pair == "ETHUSD"
         assert action.amount == 100.0
 
     def test_order_action_requires_pair(self):
@@ -31,7 +31,7 @@ class TestActionConfig:
                 name="Buy ETH",
                 type="order",
                 schedule="0 12 * * *",
-                pair="XETHZUSD",
+                pair="ETHUSD",
                 amount=0,
             )
 
@@ -41,7 +41,7 @@ class TestActionConfig:
                 name="Buy ETH",
                 type="order",
                 schedule="0 12 * * *",
-                pair="XETHZUSD",
+                pair="ETHUSD",
                 amount=-50.0,
             )
 
@@ -115,7 +115,7 @@ class TestAppConfig:
                         "name": "Buy ETH",
                         "type": "order",
                         "schedule": "0 12 * * *",
-                        "pair": "XETHZUSD",
+                        "pair": "ETHUSD",
                         "amount": 100.0,
                     }
                 ],

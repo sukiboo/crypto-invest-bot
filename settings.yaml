@@ -3,14 +3,14 @@ bot_name: crypto-invest-bot
 actions:
   - name: "Buy ETH"
     type: order
-    pair: XETHZUSD
+    pair: ETHUSD
     side: buy
-    amount: 15.00
+    amount: 20.00
     schedule: "8 15 * * *"  # every day at 10:08 EST
 
   - name: "Stake all ETH"
     type: earn
-    asset: XETH
+    asset: ETH
     strategy: restaked
     amount: null
     schedule: "9 15 * * *"  # every day at 10:09 EST
@@ -19,7 +19,7 @@ actions:
     type: order
     pair: SOLUSD
     side: buy
-    amount: 15.00
+    amount: 20.00
     schedule: "3 0 * * *"  # every day at 19:03 EST
 
   - name: "Stake all SOL"

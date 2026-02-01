@@ -14,7 +14,7 @@ actions:
   - name: Buy ETH
     type: order
     schedule: "0 12 * * *"
-    pair: XETHZUSD
+    pair: ETHUSD
     amount: 100.0
 """
     )

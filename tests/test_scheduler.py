@@ -15,7 +15,7 @@ def sample_action():
         name="Buy ETH",
         type="order",
         schedule="0 12 * * *",
-        pair="XETHZUSD",
+        pair="ETHUSD",
         amount=100.0,
     )
 
@@ -42,7 +42,7 @@ class TestAddAction:
             name="Bad Action",
             type="order",
             schedule="invalid cron",
-            pair="XETHZUSD",
+            pair="ETHUSD",
             amount=100.0,
         )
 
