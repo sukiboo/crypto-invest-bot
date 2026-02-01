@@ -1,0 +1,79 @@
+import pytest
+
+from src.scheduler import JobScheduler
+from src.schemas import ActionConfig
+
+
+@pytest.fixture
+def scheduler():
+    return JobScheduler()
+
+
+@pytest.fixture
+def sample_action():
+    return ActionConfig(
+        name="Buy ETH",
+        type="order",
+        schedule="0 12 * * *",
+        pair="XETHZUSD",
+        amount=100.0,
+    )
+
+
+# APScheduler inspects callback signatures, so we need a real async function
+async def dummy_callback(action: ActionConfig):
+    pass
+
+
+class TestAddAction:
+    def test_creates_job_with_cron_trigger(self, scheduler, sample_action):
+        job_id = scheduler.add_action(sample_action, dummy_callback)
+
+        assert job_id == "Buy ETH"
+        assert "Buy ETH" in scheduler._jobs
+
+    def test_tracks_job_id(self, scheduler, sample_action):
+        scheduler.add_action(sample_action, dummy_callback)
+
+        assert scheduler._jobs["Buy ETH"] == "Buy ETH"
+
+    def test_invalid_cron_raises_error(self, scheduler):
+        action = ActionConfig(
+            name="Bad Action",
+            type="order",
+            schedule="invalid cron",
+            pair="XETHZUSD",
+            amount=100.0,
+        )
+
+        with pytest.raises(ValueError):
+            scheduler.add_action(action, dummy_callback)
+
+
+class TestRemoveAction:
+    def test_removes_existing_job(self, scheduler, sample_action):
+        scheduler.add_action(sample_action, dummy_callback)
+
+        result = scheduler.remove_action("Buy ETH")
+
+        assert result is True
+        assert "Buy ETH" not in scheduler._jobs
+
+    def test_returns_false_for_nonexistent_job(self, scheduler):
+        result = scheduler.remove_action("nonexistent")
+
+        assert result is False
+
+
+class TestGetNextRunTimes:
+    async def test_returns_iso_formatted_times(self, scheduler, sample_action):
+        scheduler.add_action(sample_action, dummy_callback)
+        scheduler.start()
+
+        next_runs = scheduler.get_next_run_times()
+
+        assert "Buy ETH" in next_runs
+        # Should be ISO format string
+        assert "T" in next_runs["Buy ETH"]
+
+        scheduler.shutdown()
