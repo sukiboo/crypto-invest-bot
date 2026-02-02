@@ -98,7 +98,7 @@ actions:
   # Auto-stake after purchase
   - name: "Stake ETH"
     type: earn
-    asset: ETH
+    asset: XETH
     strategy: restaked
     amount: null  # null = stake all available
     schedule: "1 12 * * *"
