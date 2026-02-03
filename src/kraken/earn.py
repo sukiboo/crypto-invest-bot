@@ -10,6 +10,13 @@ class KrakenEarn:
     def __init__(self, client: KrakenClient) -> None:
         self.client = client
 
+    @staticmethod
+    def _find_balance_key(asset: str, balance: dict[str, str]) -> str | None:
+        for variant in [asset, f"X{asset}", f"XX{asset}"]:
+            if variant in balance:
+                return variant
+        return None
+
     async def get_strategies(self, asset: str | None = None) -> list[dict[str, Any]]:
         """
         Get available earn strategies.
@@ -176,11 +183,12 @@ class KrakenEarn:
         # If no amount specified, get available balance
         if amount is None:
             balance = await self.client.get_balance()
-            if asset not in balance:
+            balance_key = self._find_balance_key(asset, balance)
+            if not balance_key:
                 raise ValueError(
                     f"Asset '{asset}' not found in balance. Available: {list(balance.keys())}"
                 )
-            amount = float(balance[asset])
+            amount = float(balance[balance_key])
             if amount <= 0:
                 logger.warning("No %s balance available to stake", asset)
                 return None

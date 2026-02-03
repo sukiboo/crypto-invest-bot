@@ -22,13 +22,11 @@ class KrakenClient:
         self._lock = asyncio.Lock()  # Serialize requests to avoid nonce conflicts
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create the aiohttp session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
 
     async def close(self) -> None:
-        """Close the HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()
 
@@ -84,15 +82,17 @@ class KrakenClient:
             raise KrakenAPIError(f"HTTP request failed: {e}") from e
 
     async def get_balance(self) -> dict[str, str]:
-        """Get account balance."""
         return await self._request("POST", "/0/private/Balance")
 
     async def get_ticker(self, pair: str) -> dict[str, Any]:
-        """Get ticker information for a trading pair."""
         return await self._request("POST", "/0/public/Ticker", data={"pair": pair}, private=False)
+
+    async def get_asset_pairs(self) -> set[str]:
+        result = await self._request("POST", "/0/public/AssetPairs", private=False)
+        pairs = set(result.keys())
+        pairs.update(v.get("altname") for v in result.values() if v.get("altname"))
+        return pairs
 
 
 class KrakenAPIError(Exception):
-    """Exception raised for Kraken API errors."""
-
     pass

@@ -117,6 +117,6 @@ class CryptoInvestBot:
         self.scheduler.shutdown(wait=False)
         await self.kraken_client.close()
 
-        await self.telegram.send_update(f"{self.settings.bot_name} stopped")
+        await self.telegram.send_info(f"{self.settings.bot_name} stopped")
 
         logger.info("Shutdown complete")

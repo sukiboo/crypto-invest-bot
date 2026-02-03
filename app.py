@@ -7,15 +7,21 @@ import sys
 from src import CryptoInvestBot, Settings
 from src.utils import setup_logger
 
+logger = logging.getLogger(__name__)
+
+
+async def async_main() -> None:
+    settings = Settings()
+    await settings.validate()
+    logger.info("Configuration validated: %s", settings.bot_name)
+    bot = CryptoInvestBot(settings)
+    await bot.run()
+
 
 def main() -> int:
     setup_logger(level=logging.INFO)
-    logger = logging.getLogger(__name__)
     try:
-        settings = Settings()
-        logger.info("Configuration loaded: %s", settings.bot_name)
-        bot = CryptoInvestBot(settings)
-        asyncio.run(bot.run())
+        asyncio.run(async_main())
         return 0
     except FileNotFoundError as e:
         logger.error("Configuration error: %s", e)
