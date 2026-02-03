@@ -60,15 +60,12 @@ class KrakenTrading:
         return result
 
     async def get_open_orders(self) -> dict[str, Any]:
-        """Get all open orders."""
         return await self.client._request("POST", "/0/private/OpenOrders")
 
     async def get_closed_orders(self) -> dict[str, Any]:
-        """Get closed orders."""
         return await self.client._request("POST", "/0/private/ClosedOrders")
 
     async def cancel_order(self, txid: str) -> dict[str, Any]:
-        """Cancel an open order."""
         return await self.client._request("POST", "/0/private/CancelOrder", data={"txid": txid})
 
     async def query_orders(self, txid: str | list[str]) -> dict[str, Any]:

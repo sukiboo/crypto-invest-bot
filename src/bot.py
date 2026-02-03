@@ -75,7 +75,7 @@ class CryptoInvestBot:
         return f"{action.side} {vol_str} of {action.pair} for ${action.amount:.2f} @ {price_str}"
 
     async def _execute_earn(self, action: ActionConfig) -> dict[str, Any] | None:
-        return await self.earn.stake_after_purchase(
+        return await self.earn.stake_asset(
             asset=action.asset,  # type: ignore[arg-type]
             amount=action.amount,
             strategy_type=action.strategy,

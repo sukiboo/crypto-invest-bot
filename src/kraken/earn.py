@@ -141,18 +141,16 @@ class KrakenEarn:
         return await self.client._request("POST", "/0/private/Earn/Deallocate", data)
 
     async def get_allocations(self) -> dict[str, Any]:
-        """Get current earn allocations."""
         return await self.client._request("POST", "/0/private/Earn/Allocations")
 
     async def get_allocation_status(self, strategy_id: str) -> dict[str, Any]:
-        """Get the status of a pending allocation."""
         return await self.client._request(
             "POST",
             "/0/private/Earn/AllocateStatus",
             data={"strategy_id": strategy_id},
         )
 
-    async def stake_after_purchase(
+    async def stake_asset(
         self, asset: str, amount: float | None = None, strategy_type: str | None = None
     ) -> dict[str, Any] | None:
         """

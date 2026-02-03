@@ -13,7 +13,6 @@ class Settings:
         self.app = self._load_yaml_config(config_path)
 
     def _load_yaml_config(self, config_path: str | Path) -> AppConfig:
-        """Load and validate the YAML configuration file."""
         path = Path(config_path)
         if not path.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")

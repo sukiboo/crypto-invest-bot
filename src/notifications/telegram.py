@@ -55,11 +55,9 @@ class TelegramNotifier:
             return False
 
     async def send_update(self, message: str) -> bool:
-        """Silent notification for routine updates."""
         return await self.send_message(f"✔️ {message}", silent=True, monospace=True)
 
     async def send_info(self, message: str) -> bool:
-        """Non-silent notification for important info (e.g., bot started)."""
         return await self.send_message(f"🔆 {message}", silent=False, monospace=True)
 
     async def send_alert(self, message: str) -> bool:

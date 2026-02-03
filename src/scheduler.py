@@ -59,7 +59,6 @@ class JobScheduler:
         return job.id
 
     def remove_action(self, action_name: str) -> bool:
-        """Remove a scheduled action."""
         job_id = self._jobs.get(action_name)
         if job_id:
             self.scheduler.remove_job(job_id)
@@ -69,19 +68,16 @@ class JobScheduler:
         return False
 
     def start(self) -> None:
-        """Start the scheduler."""
         if not self.scheduler.running:
             self.scheduler.start()
             logger.info("Scheduler started with %d jobs", len(self._jobs))
 
     def shutdown(self, wait: bool = True) -> None:
-        """Shutdown the scheduler."""
         if self.scheduler.running:
             self.scheduler.shutdown(wait=wait)
             logger.info("Scheduler shutdown")
 
     def get_next_run_times(self) -> dict[str, str]:
-        """Get the next run time for each scheduled job."""
         result = {}
         for job in self.scheduler.get_jobs():
             next_run = job.next_run_time
