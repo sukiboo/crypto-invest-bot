@@ -38,10 +38,7 @@ class TelegramNotifier:
         self, message: str, silent: bool = False, monospace: bool = False
     ) -> bool:
         if monospace:
-            escaped = html.escape(message)
-            for sep in ("\r\n", "\n", "\r"):
-                escaped = escaped.replace(sep, "<br/>")
-            text = f"<code>{escaped}</code>"
+            text = f"<code>{html.escape(message)}</code>"
             parse_mode = "HTML"
         else:
             text = message

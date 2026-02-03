@@ -19,13 +19,12 @@ class TestSendMessage:
         assert "&lt;/script&gt;" in text
         assert "'" not in text or "&#x27;" in text or text.count("'") == text.count("&#x27;")
 
-    async def test_converts_newlines_to_br(self, notifier, mock_telegram_bot):
-        await notifier.send_message("line1\nline2\r\nline3", monospace=True)
+    async def test_preserves_newlines_in_monospace(self, notifier, mock_telegram_bot):
+        await notifier.send_message("line1\nline2", monospace=True)
 
         call_args = mock_telegram_bot.send_message.call_args
         text = call_args.kwargs["text"]
-        assert "<br/>" in text
-        assert "\n" not in text.replace("<br/>", "")
+        assert "\n" in text
 
     async def test_monospace_uses_code_tags(self, notifier, mock_telegram_bot):
         await notifier.send_message("test message", monospace=True)
