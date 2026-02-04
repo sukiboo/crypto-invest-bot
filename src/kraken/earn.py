@@ -193,6 +193,5 @@ class KrakenEarn:
                 return None
             logger.info("Staking all available %s: %s", asset, amount)
 
-        result = await self.allocate(strategy_id, amount, asset)
-        result["amount"] = amount
-        return result
+        await self.allocate(strategy_id, amount, asset)
+        return {"amount": amount}
