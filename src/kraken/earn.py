@@ -58,7 +58,7 @@ class KrakenEarn:
             strategy_type_lower = strategy_type.lower()
 
             # "restaked" = bonded with longest unbonding period
-            # For most coins this will be the same as "bonded", but for ETH it's the restaking option
+            # For most coins this is the same as "bonded", but for ETH it's the restaking option
             if strategy_type_lower == "restaked":
                 bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
                 if bonded:
@@ -68,7 +68,8 @@ class KrakenEarn:
                 logger.warning("No bonded strategies found for %s", asset)
                 return None
 
-            # "bonded" = bonded with shortest unbonding period (most coins only have one bonded option)
+            # "bonded" = bonded with shortest unbonding period
+            # For most coins this is the only bonded option
             if strategy_type_lower == "bonded":
                 bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
                 if bonded:
@@ -192,4 +193,6 @@ class KrakenEarn:
                 return None
             logger.info("Staking all available %s: %s", asset, amount)
 
-        return await self.allocate(strategy_id, amount, asset)
+        result = await self.allocate(strategy_id, amount, asset)
+        result["amount"] = amount
+        return result

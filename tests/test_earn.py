@@ -74,12 +74,13 @@ class TestStakeAfterPurchase:
         ]
         mock_kraken_client.get_balance.return_value = {"ETH": "1.5"}
 
-        await earn.stake_asset("ETH", amount=None, strategy_type="flexible")
+        result = await earn.stake_asset("ETH", amount=None, strategy_type="flexible")
 
         # Check allocate was called with balance amount (data is positional arg)
         allocate_call = mock_kraken_client._request.call_args_list[-1]
         assert allocate_call[0][1] == "/0/private/Earn/Allocate"
         assert allocate_call[0][2]["amount"] == "1.5"
+        assert result["amount"] == 1.5
 
     async def test_uses_specified_amount(self, earn, mock_kraken_client):
         mock_kraken_client._request.side_effect = [
@@ -87,10 +88,11 @@ class TestStakeAfterPurchase:
             {"result": "success"},
         ]
 
-        await earn.stake_asset("ETH", amount=0.5, strategy_type="flexible")
+        result = await earn.stake_asset("ETH", amount=0.5, strategy_type="flexible")
 
         allocate_call = mock_kraken_client._request.call_args_list[-1]
         assert allocate_call[0][2]["amount"] == "0.5"
+        assert result["amount"] == 0.5
 
     async def test_returns_none_when_no_strategy_found(self, earn, mock_kraken_client):
         mock_kraken_client._request.return_value = {"items": []}

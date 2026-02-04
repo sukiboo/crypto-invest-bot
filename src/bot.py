@@ -42,8 +42,8 @@ class CryptoInvestBot:
                 details = await self._format_order_details(action, result["data"])
             elif action.type == "earn":
                 result["data"] = await self._execute_earn(action)
-                amount_str = f"{action.amount}" if action.amount else "all"
-                details = f"{action.strategy} {amount_str} {action.asset}"
+                amount = result["data"].get("amount") if result["data"] else None
+                details = f"{action.strategy} {amount or '??'} {action.asset}"
             else:
                 raise ValueError(f"Unknown action type: {action.type}")
 
