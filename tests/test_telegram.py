@@ -67,3 +67,14 @@ class TestMessageTypes:
         text = call_args.kwargs["text"]
         assert "🔆" in text
         assert call_args.kwargs["disable_notification"] is False
+
+    async def test_quiet_alert_skips_send(self, notifier, mock_telegram_bot):
+        result = await notifier.send_alert("runway ok", quiet=True)
+
+        assert result is True
+        mock_telegram_bot.send_message.assert_not_called()
+
+    async def test_loud_alert_still_sends_when_quiet_false(self, notifier, mock_telegram_bot):
+        await notifier.send_alert("runway low", quiet=False)
+
+        mock_telegram_bot.send_message.assert_called_once()

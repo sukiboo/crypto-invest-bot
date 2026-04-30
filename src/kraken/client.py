@@ -84,6 +84,10 @@ class KrakenClient:
     async def get_balance(self) -> dict[str, str]:
         return await self._request("POST", "/0/private/Balance")
 
+    async def get_usd_balance(self) -> float:
+        balance = await self.get_balance()
+        return float(balance.get("ZUSD", 0))
+
     async def get_ticker(self, pair: str) -> dict[str, Any]:
         return await self._request("POST", "/0/public/Ticker", data={"pair": pair}, private=False)
 

@@ -38,3 +38,9 @@ actions:
     strategy: bonded       # bonded = higher yield, unbonding period
     amount: 5.0            # stake specific amount (not all)
     schedule: "1 9 * * 1"  # 1 minute after purchase
+
+  # Cash runway check - alerts (loud) if balance won't cover the next N days of buys
+  - name: "Check cash runway"
+    type: check_runway     # check_runway = warns when USD balance is below upcoming buy commitments
+    days: 7                # lookahead horizon in days
+    schedule: "0 12 * * *" # check daily at noon UTC

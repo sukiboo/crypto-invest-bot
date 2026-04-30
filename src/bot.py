@@ -1,7 +1,10 @@
 import asyncio
 import logging
 import signal
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+from apscheduler.triggers.cron import CronTrigger
 
 from src.kraken import KrakenClient, KrakenEarn, KrakenTrading
 from src.notifications import TelegramNotifier
@@ -37,6 +40,7 @@ class CryptoInvestBot:
         try:
             logger.info("Executing action: %s [%s]", action.name, action.type)
 
+            details: str | None
             if action.type == "order":
                 result["data"] = await self._execute_order(action)
                 details = await self._format_order_details(action, result["data"])
@@ -44,11 +48,15 @@ class CryptoInvestBot:
                 result["data"] = await self._execute_earn(action)
                 amount = result["data"].get("amount") if result["data"] else None
                 details = f"{action.strategy} {amount or '??'} {action.asset}"
+            elif action.type == "check_runway":
+                result["data"] = await self._execute_check_runway(action)
+                details = None
             else:
                 raise ValueError(f"Unknown action type: {action.type}")
 
             result["success"] = True
-            await self.telegram.send_update(f"{action.name}: {details}")
+            if details is not None:
+                await self.telegram.send_update(f"{action.name}: {details}")
 
         except Exception as e:
             logger.exception("Action '%s' failed: %s", action.name, e)
@@ -80,6 +88,41 @@ class CryptoInvestBot:
             amount=action.amount,
             strategy_type=action.strategy,
         )
+
+    async def _execute_check_runway(self, action: ActionConfig) -> dict[str, Any]:
+        days = action.days
+        assert days is not None
+        now = datetime.now(timezone.utc)
+        end = now + timedelta(days=days)
+
+        required = 0.0
+        items: list[tuple[str, float, int]] = []
+        for a in self.settings.actions:
+            if a.type != "order" or a.side != "buy" or a.amount is None:
+                continue
+            trigger = CronTrigger.from_crontab(a.schedule, timezone="UTC")
+            count, prev = 0, now
+            while (nxt := trigger.get_next_fire_time(prev, prev)) is not None and nxt <= end:
+                count += 1
+                prev = nxt
+            if count:
+                required += a.amount * count
+                items.append((a.name, a.amount, count))
+
+        balance = await self.kraken_client.get_usd_balance()
+        ok = balance >= required
+
+        if ok:
+            msg = f"runway ok ({days}d): ${balance:.2f} >= ${required:.2f}"
+        else:
+            header = (
+                f"runway low ({days}d): ${balance:.2f} < ${required:.2f} "
+                f"(need +${required - balance:.2f})"
+            )
+            msg = "\n".join([header, *(f"  {n}: {c} x ${a:.2f}" for n, a, c in items)])
+
+        await self.telegram.send_alert(msg, quiet=ok)
+        return {"balance": balance, "required": required, "ok": ok}
 
     def _setup_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()

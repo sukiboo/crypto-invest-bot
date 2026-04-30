@@ -96,6 +96,41 @@ class TestActionConfig:
                 amount=-10.0,
             )
 
+    def test_check_runway_action_valid(self):
+        action = ActionConfig(
+            name="Check runway",
+            type="check_runway",
+            schedule="0 12 * * *",
+            days=7,
+        )
+        assert action.days == 7
+
+    def test_check_runway_requires_days(self):
+        with pytest.raises(ValidationError, match="'days' must be positive"):
+            ActionConfig(
+                name="Check runway",
+                type="check_runway",
+                schedule="0 12 * * *",
+            )
+
+    def test_check_runway_rejects_zero_days(self):
+        with pytest.raises(ValidationError, match="'days' must be positive"):
+            ActionConfig(
+                name="Check runway",
+                type="check_runway",
+                schedule="0 12 * * *",
+                days=0,
+            )
+
+    def test_check_runway_rejects_negative_days(self):
+        with pytest.raises(ValidationError, match="'days' must be positive"):
+            ActionConfig(
+                name="Check runway",
+                type="check_runway",
+                schedule="0 12 * * *",
+                days=-1,
+            )
+
 
 class TestAppConfig:
     def test_none_actions_defaults_to_empty_list(self):

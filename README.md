@@ -6,6 +6,7 @@ Automated scheduled crypto investing on Kraken with Telegram notifications.
 
 - **Scheduled Orders**: Buy/sell crypto on cron schedules (daily, weekly, etc.)
 - **Scheduled Staking**: Automatically stake assets to earn yield
+- **Cash Runway Check**: Proactive Telegram warning when USD balance won't cover upcoming buys
 - **Telegram Alerts**: Get notified on successful actions and errors
 - **Docker Deployment**: Easy server deployment via SSH
 
@@ -102,6 +103,12 @@ actions:
     strategy: restaked
     amount: null  # null = stake all available
     schedule: "1 12 * * *"
+
+  # Daily check that USD balance covers the next 7 days of buys
+  - name: "Check cash runway"
+    type: check_runway
+    days: 7
+    schedule: "0 12 * * *"
 ```
 
 **Note:** All schedules are in **UTC**. Both `ETHUSD` and `XETHZUSD` formats work for pairs.
@@ -112,6 +119,7 @@ actions:
 |------|-----------------|----------|
 | `order` | `pair`, `side`, `amount` | `order_type` (default: `market`) |
 | `earn` | `asset`, `strategy` | `amount` (default: `null` = all) |
+| `check_runway` | `days` | — |
 
 **Earn strategies:**
 
@@ -123,6 +131,20 @@ The bot maps strategy names to Kraken's lock types:
 - `restaked` -- **Bonded restaking**: Maps to Kraken's "bonded" staking strategy with the longest unbonding period. For most coins, this will be the same strategy as `bonded` (since they only have one bonded option). For assets like ETH that support restaking, this selects the restaking option with the longest lock period. Highest rewards available, but longest commitment with extended unbonding periods.
 
 **Note:** Lock periods and unbonding periods vary by asset. Most coins only offer `flexible` and `bonded` options. Only certain assets like ETH offer a separate restaking option. Check Kraken's [Earn documentation](https://support.kraken.com/hc/articles/360044886311-overview-of-opt-in-rewards-on-kraken) for specific details per asset. For most assets `restaked` will map to `bonded`.
+
+**Cash runway check:**
+
+Kraken doesn't expose a clean way to auto-replenish USD, so the bot can warn you when the account is about to run dry. A `check_runway` action sums the USD required by all upcoming `buy` orders over the next `days` and compares it against the account's USD balance:
+
+- **Sufficient balance** -- the result is logged only (no Telegram message), so it serves as a passive heartbeat in the logs.
+- **Insufficient balance** -- a Telegram alert (with phone notification) lists the deficit and shows which buys are draining the cash, e.g.:
+  ```
+  runway low (7d): $87.50 < $350.00 (need +$262.50)
+    Buy ETH: 7 x $25.00
+    Buy SOL: 7 x $25.00
+  ```
+
+You can run multiple `check_runway` actions with different horizons -- e.g., a frequent short-window check for urgency and a weekly long-window check for planning.
 
 ## Running
 

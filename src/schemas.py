@@ -9,7 +9,7 @@ PAIR_PATTERN = re.compile(r"^[A-Z0-9]{5,12}$")
 ASSET_PATTERN = re.compile(r"^[A-Z0-9]{2,6}$")
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ActionType = Literal["order", "earn"]
+ActionType = Literal["order", "earn", "check_runway"]
 OrderType = Literal["market", "limit"]
 OrderSide = Literal["buy", "sell"]
 EarnLockType = Literal["flexible", "bonded", "restaked"]
@@ -41,6 +41,9 @@ class ActionConfig(BaseModel):
     asset: str | None = None  # exact Kraken asset name, e.g. "ETH", "XBT"
     strategy: EarnLockType | None = None
 
+    # For check_runway actions
+    days: int | None = None  # lookahead horizon in days
+
     # Shared (required for order, optional for earn)
     amount: float | None = None  # None for earn = stake all available
 
@@ -64,6 +67,11 @@ class ActionConfig(BaseModel):
                 raise ValueError(f"Action '{self.name}': 'strategy' is required for earn actions")
             if self.amount is not None and self.amount <= 0:
                 raise ValueError(f"Action '{self.name}': 'amount' must be positive if specified")
+        elif self.type == "check_runway":
+            if not self.days or self.days <= 0:
+                raise ValueError(
+                    f"Action '{self.name}': 'days' must be positive for check_runway actions"
+                )
         return self
 
 

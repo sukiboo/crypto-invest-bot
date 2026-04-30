@@ -57,5 +57,8 @@ class TelegramNotifier:
     async def send_info(self, message: str) -> bool:
         return await self.send_message(f"🔆 {message}", silent=False, monospace=True)
 
-    async def send_alert(self, message: str) -> bool:
+    async def send_alert(self, message: str, quiet: bool = False) -> bool:
+        if quiet:
+            logger.info("[quiet alert] %s", message)
+            return True
         return await self.send_message(f"❌ {message}", silent=False, monospace=True)
