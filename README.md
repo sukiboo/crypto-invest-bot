@@ -137,11 +137,11 @@ The bot maps strategy names to Kraken's lock types:
 Kraken doesn't expose a clean way to auto-replenish USD, so the bot can warn you when the account is about to run dry. A `check_runway` action sums the USD required by all upcoming `buy` orders over the next `days` and compares it against the account's USD balance:
 
 - **Sufficient balance** -- the result is logged only (no Telegram message), so it serves as a passive heartbeat in the logs.
-- **Insufficient balance** -- a Telegram alert (with phone notification) lists the deficit and shows which buys are draining the cash, e.g.:
+- **Insufficient balance** -- a Telegram alert (with phone notification) shows which buys are draining the cash, e.g.:
   ```
-  runway low (7d): $87.50 < $350.00 (need +$262.50)
-    Buy ETH: 7 x $25.00
-    Buy SOL: 7 x $25.00
+  7d runway low: $87.50 < $190.00
+    Daily BTC: 7 x $20.00 = $140.00
+    Weekly SOL: 1 x $50.00 = $50.00
   ```
 
 You can run multiple `check_runway` actions with different horizons -- e.g., a frequent short-window check for urgency and a weekly long-window check for planning.

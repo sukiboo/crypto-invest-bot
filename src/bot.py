@@ -113,13 +113,12 @@ class CryptoInvestBot:
         ok = balance >= required
 
         if ok:
-            msg = f"runway ok ({days}d): ${balance:.2f} >= ${required:.2f}"
+            msg = f"{days}d runway ok: ${balance:.2f} >= ${required:.2f}"
         else:
-            header = (
-                f"runway low ({days}d): ${balance:.2f} < ${required:.2f} "
-                f"(need +${required - balance:.2f})"
+            header = f"{days}d runway low: ${balance:.2f} < ${required:.2f}"
+            msg = "\n".join(
+                [header, *(f"  {n}: {c} x ${a:.2f} = ${a * c:.2f}" for n, a, c in items)]
             )
-            msg = "\n".join([header, *(f"  {n}: {c} x ${a:.2f}" for n, a, c in items)])
 
         await self.telegram.send_alert(msg, quiet=ok)
         return {"balance": balance, "required": required, "ok": ok}
