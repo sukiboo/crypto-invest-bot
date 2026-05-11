@@ -121,6 +121,18 @@ actions:
 | `earn` | `asset`, `strategy` | `amount` (default: `null` = all) |
 | `check_runway` | `days` | — |
 
+**Order notifications (buys vs. sells):**
+
+Buy orders use `oflags=viqc,fcib` (volume in quote currency, fee in base), so the fee is deducted from the bought asset. The Telegram notification reports the **net post-fee volume** and the **effective per-unit price** (`cost / net_volume`), not the gross market price:
+
+```
+✔️ Buy SOL: buy 0.25819917 of SOLUSDC for $25.00 @ $96.85
+                ^^^^^^^^^^                        ^^^^^^
+                net SOL credited                  effective $/SOL paid
+```
+
+Sell orders report gross volume and gross market price — fee is taken from the quote side, so `vol_exec` already matches the base that left the balance.
+
 **Earn strategies:**
 
 Available strategies depend on the asset and are determined by querying Kraken's API.

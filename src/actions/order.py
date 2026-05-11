@@ -27,13 +27,14 @@ async def _format(
         order_result.get("txid", [])
     )
     # Buys use oflags=fcib, so the fee is deducted from the bought (base) asset.
-    # Report the net amount that actually landed in the balance.
-    if config.side == "buy" and vol_exec and fee is not None:
+    # Report the net amount credited and the effective ($ paid per net unit) price.
+    if config.side == "buy" and vol_exec and fee is not None and cost is not None:
         net = float(vol_exec) - fee
         vol_str = f"{net:.8f}".rstrip("0").rstrip(".")
+        price_str = f"${cost / net:.2f}" if net > 0 else "??"
     else:
         vol_str = vol_exec or "??"
-    price_str = f"${price:.2f}" if price else "??"
+        price_str = f"${price:.2f}" if price else "??"
     if config.amount is not None:
         amount_str = f"${config.amount:.2f}"
     elif cost is not None:

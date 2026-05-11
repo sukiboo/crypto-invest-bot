@@ -136,4 +136,13 @@ class KrakenTrading:
         if cost_result is None:
             logger.warning("Order %s: cost not available", txid)
 
+        logger.info(
+            "Order %s filled: vol_exec=%s price=%s cost=%s fee=%s",
+            txid,
+            vol_exec_result,
+            price_result,
+            cost_result,
+            fee_result,
+        )
+
         return vol_exec_result, price_result, cost_result, fee_result
