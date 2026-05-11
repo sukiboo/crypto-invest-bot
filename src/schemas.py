@@ -9,7 +9,7 @@ PAIR_PATTERN = re.compile(r"^[A-Z0-9]{5,12}$")
 ASSET_PATTERN = re.compile(r"^[A-Z0-9]{2,6}$")
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-ActionType = Literal["order", "earn", "check_runway"]
+ActionType = Literal["order", "earn", "check_runway", "maintain_reserve"]
 OrderType = Literal["market", "limit"]
 OrderSide = Literal["buy", "sell"]
 EarnLockType = Literal["flexible", "bonded", "restaked"]
@@ -54,10 +54,13 @@ class ActionConfig(BaseModel):
                 raise ValueError(f"Action '{self.name}': 'pair' is required for order actions")
             if not PAIR_PATTERN.match(self.pair):
                 raise ValueError(f"Action '{self.name}': invalid pair format '{self.pair}'")
-            if not self.amount or self.amount <= 0:
-                raise ValueError(
-                    f"Action '{self.name}': 'amount' must be positive for order actions"
-                )
+            if self.amount is None:
+                if self.side != "buy":
+                    raise ValueError(
+                        f"Action '{self.name}': 'amount=None' is only supported for buy orders"
+                    )
+            elif self.amount <= 0:
+                raise ValueError(f"Action '{self.name}': 'amount' must be positive if specified")
         elif self.type == "earn":
             if not self.asset:
                 raise ValueError(f"Action '{self.name}': 'asset' is required for earn actions")
@@ -71,6 +74,21 @@ class ActionConfig(BaseModel):
             if not self.days or self.days <= 0:
                 raise ValueError(
                     f"Action '{self.name}': 'days' must be positive for check_runway actions"
+                )
+        elif self.type == "maintain_reserve":
+            if not self.asset:
+                raise ValueError(
+                    f"Action '{self.name}': 'asset' is required for maintain_reserve actions"
+                )
+            if not ASSET_PATTERN.match(self.asset):
+                raise ValueError(f"Action '{self.name}': invalid asset format '{self.asset}'")
+            if not self.strategy:
+                raise ValueError(
+                    f"Action '{self.name}': 'strategy' is required for maintain_reserve actions"
+                )
+            if not self.days or self.days <= 0:
+                raise ValueError(
+                    f"Action '{self.name}': 'days' must be positive for maintain_reserve actions"
                 )
         return self
 

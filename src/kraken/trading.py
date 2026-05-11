@@ -15,7 +15,7 @@ class KrakenTrading:
         self,
         pair: str,
         side: Literal["buy", "sell"],
-        amount: float,
+        amount: float | None,
         validate_only: bool = False,
     ) -> dict[str, Any]:
         """
@@ -24,33 +24,40 @@ class KrakenTrading:
         Args:
             pair: Exact Kraken trading pair (e.g., "XXBTZUSD", "XETHZUSD")
             side: "buy" or "sell"
-            amount: Amount in quote currency (USD) for buys, or base currency for sells
+            amount: For buys, amount in quote currency (e.g. USD); None = use full
+                quote balance. For sells, amount in base currency.
             validate_only: If True, only validate the order without executing
 
         Returns:
-            Order result from Kraken API
+            Order result from Kraken API, or {} if skipped (zero balance for amount=None buy).
         """
 
-        # For market buys, we need to specify the volume in quote currency (USD)
-        # using the "oflags=viqc" flag (volume in quote currency)
+        if amount is None:
+            if side != "buy":
+                raise ValueError("amount=None is only supported for buy orders")
+            quote = await self.client.get_pair_quote(pair)
+            amount = await self.client.get_asset_balance(quote)
+            if amount <= 0:
+                logger.info("Skipping %s buy: %s balance is 0", pair, quote)
+                return {}
+            logger.info("Buying %s with full %s balance: %s", pair, quote, amount)
+
         data: dict[str, Any] = {
             "pair": pair,
             "type": side,
             "ordertype": "market",
+            "volume": str(amount),
         }
 
         if side == "buy":
-            # For buys, amount is in USD - use volume in quote currency flag
-            data["volume"] = str(amount)
-            data["oflags"] = "viqc"
-        else:
-            # For sells, amount is in the base currency
-            data["volume"] = str(amount)
+            # viqc = volume in quote currency; fcib = fee in base currency
+            # so the full quote balance can be spent without reserving fee.
+            data["oflags"] = "viqc,fcib"
 
         if validate_only:
             data["validate"] = True
 
-        logger.info("Placing %s market order: %s USD on %s", side, amount, pair)
+        logger.info("Placing %s market order: %s on %s", side, amount, pair)
 
         result = await self.client._request("POST", "/0/private/AddOrder", data=data)
 

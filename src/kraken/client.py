@@ -20,6 +20,7 @@ class KrakenClient:
         self.api_secret = api_secret
         self._session: aiohttp.ClientSession | None = None
         self._lock = asyncio.Lock()  # Serialize requests to avoid nonce conflicts
+        self._asset_pairs: dict[str, dict[str, Any]] | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -84,18 +85,48 @@ class KrakenClient:
     async def get_balance(self) -> dict[str, str]:
         return await self._request("POST", "/0/private/Balance")
 
+    async def get_asset_balance(self, asset: str, balance: dict[str, str] | None = None) -> float:
+        if balance is None:
+            balance = await self.get_balance()
+        for variant in (asset, f"X{asset}", f"Z{asset}"):
+            if variant in balance:
+                return float(balance[variant])
+        return 0.0
+
     async def get_usd_balance(self) -> float:
-        balance = await self.get_balance()
-        return float(balance.get("ZUSD", 0))
+        return await self.get_asset_balance("USD")
 
     async def get_ticker(self, pair: str) -> dict[str, Any]:
         return await self._request("POST", "/0/public/Ticker", data={"pair": pair}, private=False)
 
+    async def _get_asset_pairs_metadata(self) -> dict[str, dict[str, Any]]:
+        if self._asset_pairs is None:
+            self._asset_pairs = await self._request("POST", "/0/public/AssetPairs", private=False)
+        return self._asset_pairs  # type: ignore[return-value]
+
     async def get_asset_pairs(self) -> set[str]:
-        result = await self._request("POST", "/0/public/AssetPairs", private=False)
-        pairs = set(result.keys())
-        pairs.update(v.get("altname") for v in result.values() if v.get("altname"))
+        metadata = await self._get_asset_pairs_metadata()
+        pairs: set[str] = set(metadata.keys())
+        for v in metadata.values():
+            altname = v.get("altname")
+            if isinstance(altname, str):
+                pairs.add(altname)
         return pairs
+
+    async def get_pair_quote(self, pair: str) -> str:
+        metadata = await self._get_asset_pairs_metadata()
+        entry: dict[str, Any] | None = metadata.get(pair)
+        if entry is None:
+            entry = next(
+                (v for v in metadata.values() if v.get("altname") == pair),
+                None,
+            )
+        if entry is None:
+            raise ValueError(f"Unknown trading pair: {pair}")
+        quote = entry.get("quote")
+        if not quote:
+            raise ValueError(f"Pair '{pair}' missing 'quote' field in AssetPairs response")
+        return quote
 
 
 class KrakenAPIError(Exception):

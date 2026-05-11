@@ -144,6 +144,22 @@ class KrakenEarn:
     async def get_allocations(self) -> dict[str, Any]:
         return await self.client._request("POST", "/0/private/Earn/Allocations")
 
+    async def get_strategy_holdings(self, strategy_id: str) -> dict[str, float]:
+        """
+        Return {'bonded': float, 'pending_unstake': float} for a given strategy.
+        bonded = total amount currently allocated to the strategy
+        pending_unstake = amount in the unbonding window
+        """
+        allocations = await self.get_allocations()
+        for item in allocations.get("items", []):
+            if item.get("strategy_id") != strategy_id:
+                continue
+            allocated = item.get("amount_allocated", {})
+            total = float(allocated.get("total", {}).get("native") or 0)
+            unbonding = float(allocated.get("unbonding", {}).get("native") or 0)
+            return {"bonded": total, "pending_unstake": unbonding}
+        return {"bonded": 0.0, "pending_unstake": 0.0}
+
     async def get_allocation_status(self, strategy_id: str) -> dict[str, Any]:
         return await self.client._request(
             "POST",
