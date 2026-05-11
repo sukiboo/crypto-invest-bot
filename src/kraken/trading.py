@@ -93,10 +93,10 @@ class KrakenTrading:
 
     async def get_filled_order_details(
         self, txid: str | list[str], max_attempts: int = 5, delay: float = 1.0
-    ) -> tuple[str | None, float | None]:
+    ) -> tuple[str | None, float | None, float | None, float | None]:
         if isinstance(txid, list):
             if not txid:
-                return None, None
+                return None, None, None, None
             else:
                 txid = txid[0]
 
@@ -121,13 +121,19 @@ class KrakenTrading:
 
         vol_exec = order_info.get("vol_exec")
         price = order_info.get("price")
+        cost = order_info.get("cost")
+        fee = order_info.get("fee")
 
         vol_exec_result = None if not vol_exec or vol_exec in ("0", "0.00000000") else vol_exec
         price_result = None if not price or float(price) == 0 else float(price)
+        cost_result = None if not cost or float(cost) == 0 else float(cost)
+        fee_result = None if fee is None else float(fee)
 
         if vol_exec_result is None:
             logger.warning("Order %s: vol_exec not available", txid)
         if price_result is None:
             logger.warning("Order %s: price not available", txid)
+        if cost_result is None:
+            logger.warning("Order %s: cost not available", txid)
 
-        return vol_exec_result, price_result
+        return vol_exec_result, price_result, cost_result, fee_result

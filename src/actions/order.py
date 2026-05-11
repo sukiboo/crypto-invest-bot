@@ -23,8 +23,21 @@ async def _format(
 ) -> str:
     if not order_result:
         return f"skipped {config.pair}: no quote balance"
-    vol_exec, price = await trading.get_filled_order_details(order_result.get("txid", []))
-    vol_str = vol_exec or "??"
+    vol_exec, price, cost, fee = await trading.get_filled_order_details(
+        order_result.get("txid", [])
+    )
+    # Buys use oflags=fcib, so the fee is deducted from the bought (base) asset.
+    # Report the net amount that actually landed in the balance.
+    if config.side == "buy" and vol_exec and fee is not None:
+        net = float(vol_exec) - fee
+        vol_str = f"{net:.8f}".rstrip("0").rstrip(".")
+    else:
+        vol_str = vol_exec or "??"
     price_str = f"${price:.2f}" if price else "??"
-    amount_str = f"${config.amount:.2f}" if config.amount is not None else "all available"
+    if config.amount is not None:
+        amount_str = f"${config.amount:.2f}"
+    elif cost is not None:
+        amount_str = f"${cost:.2f}"
+    else:
+        amount_str = "all available"
     return f"{config.side} {vol_str} of {config.pair} for {amount_str} @ {price_str}"
