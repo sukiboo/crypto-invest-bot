@@ -128,6 +128,23 @@ class KrakenClient:
             raise ValueError(f"Pair '{pair}' missing 'quote' field in AssetPairs response")
         return quote
 
+    async def get_pair_symbols(self, pair: str) -> tuple[str, str]:
+        """Return (base, quote) display symbols from AssetPairs `wsname` (e.g. 'ETH', 'USD')."""
+        metadata = await self._get_asset_pairs_metadata()
+        entry: dict[str, Any] | None = metadata.get(pair)
+        if entry is None:
+            entry = next(
+                (v for v in metadata.values() if v.get("altname") == pair),
+                None,
+            )
+        if entry is None:
+            raise ValueError(f"Unknown trading pair: {pair}")
+        wsname = entry.get("wsname")
+        if not isinstance(wsname, str) or "/" not in wsname:
+            raise ValueError(f"Pair '{pair}' missing or malformed 'wsname': {wsname!r}")
+        base, quote = wsname.split("/", 1)
+        return base, quote
+
 
 class KrakenAPIError(Exception):
     pass
