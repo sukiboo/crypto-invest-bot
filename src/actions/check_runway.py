@@ -9,13 +9,18 @@ from src.schemas import ActionConfig
 @dataclass
 class RunwayLine:
     quote: str
-    balance: float
+    spot: float
+    earn: float
     required: float
     items: list[tuple[str, float, int]]
 
     @property
+    def total(self) -> float:
+        return self.spot + self.earn
+
+    @property
     def ok(self) -> bool:
-        return self.balance >= self.required
+        return self.total >= self.required
 
 
 class CheckRunwayAction(Action):
@@ -27,14 +32,19 @@ class CheckRunwayAction(Action):
 
         by_quote = await upcoming_buys_by_quote(ctx.settings.actions, ctx.kraken_client, now, end)
         balance = await ctx.kraken_client.get_balance()
+        earn_by_asset = await ctx.earn.get_allocations_by_asset()
 
         lines: list[RunwayLine] = []
         for quote, items in by_quote.items():
-            bal = await ctx.kraken_client.get_asset_balance(quote, balance)
+            spot = await ctx.kraken_client.get_asset_balance(quote, balance)
+            earn = sum(
+                earn_by_asset.get(variant, 0.0) for variant in (quote, f"X{quote}", f"Z{quote}")
+            )
             lines.append(
                 RunwayLine(
                     quote=quote,
-                    balance=bal,
+                    spot=spot,
+                    earn=earn,
                     required=sum(amt * c for _, amt, c in items),
                     items=items,
                 )
@@ -48,14 +58,13 @@ class CheckRunwayAction(Action):
 def _format(days: int, lines: list[RunwayLine]) -> str:
     if not lines:
         return f"{days}d runway: no buy actions scheduled"
-    if all(line.ok for line in lines):
-        parts = [f"{line.quote} ${line.balance:.2f} >= ${line.required:.2f}" for line in lines]
-        return f"{days}d runway ok: " + ", ".join(parts)
-    out = [f"{days}d runway low:"]
+    all_ok = all(line.ok for line in lines)
+    out = [f"{days}d runway {'ok' if all_ok else 'low'}", "Balance"]
     for line in lines:
-        cmp = ">=" if line.ok else "<"
-        out.append(f"  {line.quote}: ${line.balance:.2f} {cmp} ${line.required:.2f}")
-        if not line.ok:
-            for n, amt, c in line.items:
-                out.append(f"    {n}: {c} x ${amt:.2f} = ${amt * c:.2f}")
+        cmp = ">" if line.ok else "<"
+        out.append(f"    {line.total:.2f} {line.quote} {cmp} {line.required:.2f} {line.quote}")
+    out.append("Actions")
+    for line in lines:
+        for n, amt, c in line.items:
+            out.append(f"    {n}: {c} x {amt:.2f} {line.quote} = {amt * c:.2f} {line.quote}")
     return "\n".join(out)

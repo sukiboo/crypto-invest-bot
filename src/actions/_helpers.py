@@ -23,6 +23,6 @@ async def upcoming_buys_by_quote(
             count += 1
             prev = nxt
         if count:
-            quote = await kraken_client.get_pair_quote(a.pair)
+            _, quote = await kraken_client.get_pair_symbols(a.pair)
             by_quote.setdefault(quote, []).append((a.name, a.amount, count))
     return by_quote

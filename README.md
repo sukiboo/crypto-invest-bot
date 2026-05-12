@@ -80,18 +80,18 @@ Example configuration:
 bot_name: crypto-invest-bot
 
 actions:
-  # Daily DCA - buy every day at noon UTC
-  - name: "Daily BTC"
+  # Daily DCA in USDC - buy every day at noon UTC
+  - name: "Daily ETH"
     type: order
-    pair: BTCUSD
+    pair: ETHUSDC
     side: buy
     amount: 20.00
     schedule: "0 12 * * *"
 
-  # Weekly buy - every Monday
-  - name: "Weekly SOL"
+  # Weekly buy in USD - every Monday
+  - name: "Weekly BTC"
     type: order
-    pair: SOLUSD
+    pair: BTCUSD
     side: buy
     amount: 50.00
     schedule: "0 9 * * 1"
@@ -104,7 +104,7 @@ actions:
     amount: null  # null = stake all available
     schedule: "1 12 * * *"
 
-  # Daily check that USD balance covers the next 7 days of buys
+  # Daily check that each quote balance covers the next 7 days of buys
   - name: "Check cash runway"
     type: check_runway
     days: 7
@@ -148,15 +148,20 @@ The bot maps strategy names to Kraken's lock types:
 
 **Cash runway check:**
 
-Kraken doesn't expose a clean way to auto-replenish USD, so the bot can warn you when the account is about to run dry. A `check_runway` action sums the USD required by all upcoming `buy` orders over the next `days` and compares it against the account's USD balance:
+Kraken doesn't expose a clean way to auto-replenish quote balances, so the bot can warn you when the account is about to run dry. A `check_runway` action groups upcoming `buy` orders by their **quote currency** (USD, USDC, …), sums the required spend over the next `days`, and compares each quote's `spot + earn-allocated` balance against that requirement. `earn` comes from `/Earn/Allocations` so funds you've staked still count toward your runway (you can deallocate them before the buy hits).
 
-- **Sufficient balance** -- the result is logged only (no Telegram message), so it serves as a passive heartbeat in the logs.
-- **Insufficient balance** -- a Telegram alert (with phone notification) shows which buys are draining the cash, e.g.:
+- **Sufficient balance** -- the result is logged only and sent silently to Telegram (no phone notification).
+- **Insufficient balance** -- a Telegram alert (with phone notification) shows total balance vs. liability per quote, then the upcoming buys that drain each:
   ```
-  7d runway low: $87.50 < $190.00
-    Daily BTC: 7 x $20.00 = $140.00
-    Weekly SOL: 1 x $50.00 = $50.00
+  ❌ 7d runway low
+  Balance
+      100.00 USDC < 140.00 USDC
+      100.00 USD > 50.00 USD
+  Actions
+      Daily ETH: 7 x 20.00 USDC = 140.00 USDC
+      Weekly BTC: 1 x 50.00 USD = 50.00 USD
   ```
+  Balances are quote-by-quote — there's no cross-currency netting, so a USD shortfall is flagged even if you have excess USDC.
 
 You can run multiple `check_runway` actions with different horizons -- e.g., a frequent short-window check for urgency and a weekly long-window check for planning.
 

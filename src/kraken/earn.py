@@ -79,11 +79,11 @@ class KrakenEarn:
                 logger.warning("No bonded strategies found for %s", asset)
                 return None
 
-            # "flexible" maps directly to Kraken's "flexible" lock type
+            # "flexible" (user-facing) maps to Kraken's "flex" lock type
             if strategy_type_lower == "flexible":
                 for strategy in strategies:
                     lock_type = strategy.get("lock_type", {}).get("type", "").lower()
-                    if lock_type == "flexible":
+                    if lock_type == "flex":
                         return strategy
                 logger.warning("No flexible strategies found for %s", asset)
                 return None
@@ -143,6 +143,39 @@ class KrakenEarn:
 
     async def get_allocations(self) -> dict[str, Any]:
         return await self.client._request("POST", "/0/private/Earn/Allocations")
+
+    async def get_allocations_by_asset(self) -> dict[str, float]:
+        """Sum native bonded allocations per asset, excluding flexible strategies.
+
+        Flexible (auto-flex) allocations are skipped because Kraken already reports
+        their balance as spendable in /Balance, so adding them again double-counts.
+        """
+        strategies = await self.get_strategies()
+        flexible_ids = {
+            s["id"] for s in strategies if s.get("lock_type", {}).get("type", "").lower() == "flex"
+        }
+        allocations = await self.get_allocations()
+        by_asset: dict[str, float] = {}
+        for item in allocations.get("items", []):
+            asset = item.get("native_asset")
+            strategy_id = item.get("strategy_id")
+            if not asset:
+                continue
+            total = float(item.get("amount_allocated", {}).get("total", {}).get("native") or 0)
+            if total <= 0:
+                continue
+            is_flex = strategy_id in flexible_ids
+            logger.info(
+                "Earn allocation: asset=%s strategy=%s amount=%s flexible=%s",
+                asset,
+                strategy_id,
+                total,
+                is_flex,
+            )
+            if is_flex:
+                continue
+            by_asset[asset] = by_asset.get(asset, 0.0) + total
+        return by_asset
 
     async def get_strategy_holdings(self, strategy_id: str) -> dict[str, float]:
         """
