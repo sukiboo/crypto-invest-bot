@@ -28,15 +28,22 @@ async def _format(
     )
     assert config.pair is not None
     base, quote = await trading.client.get_pair_symbols(config.pair)
-    # Buys use oflags=fcib, so the fee is deducted from the bought (base) asset.
-    # Report the net amount credited and the effective per-unit price (cost / net_vol).
-    if config.side == "buy" and vol_exec and fee is not None and cost is not None:
-        net = float(vol_exec) - fee
+    # Buys use oflags=fcib, so the fee is deducted from the bought (base) asset, but
+    # Kraken's QueryOrders `fee` field reports the value in quote currency — convert
+    # via the avg fill price to get the base-denominated fee that hits the ledger.
+    if (
+        config.side == "buy"
+        and vol_exec
+        and fee is not None
+        and cost is not None
+        and price is not None
+    ):
+        net = float(vol_exec) - fee / price
         vol_str = f"{net:.8f}".rstrip("0").rstrip(".")
-        price_str = f"{cost / net:.2f} {base}/{quote}" if net > 0 else "??"
+        price_str = f"{cost / net:.2f} {quote}/{base}" if net > 0 else "??"
     else:
         vol_str = vol_exec or "??"
-        price_str = f"{price:.2f} {base}/{quote}" if price else "??"
+        price_str = f"{price:.2f} {quote}/{base}" if price else "??"
     if config.amount is not None:
         amount_str = f"{config.amount:.2f} {quote}"
     elif cost is not None:
