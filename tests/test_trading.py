@@ -67,10 +67,11 @@ class TestPlaceMarketOrder:
 
 class TestGetFilledOrder:
     async def test_buy_reads_base_and_quote_from_ledger(self, trading, mock_kraken_client):
+        mock_kraken_client._request.return_value = {"trades": {"T1": {"ordertxid": "ABC123"}}}
         mock_kraken_client.get_ledger_entries = AsyncMock(
             return_value={
-                "L1": {"refid": "ABC123", "amount": "0.05", "fee": "0.0002"},
-                "L2": {"refid": "ABC123", "amount": "-125.00", "fee": "0"},
+                "L1": {"refid": "T1", "amount": "0.05", "fee": "0.0002"},
+                "L2": {"refid": "T1", "amount": "-125.00", "fee": "0"},
             }
         )
 
@@ -85,10 +86,11 @@ class TestGetFilledOrder:
     async def test_sell_swaps_received_and_paid_sides(self, trading, mock_kraken_client):
         # On a sell, the positive ledger entry is the quote credit (with quote fee)
         # and the negative entry is the base debit (no fee since fcib is buy-only).
+        mock_kraken_client._request.return_value = {"trades": {"T1": {"ordertxid": "ABC123"}}}
         mock_kraken_client.get_ledger_entries = AsyncMock(
             return_value={
-                "L1": {"refid": "ABC123", "amount": "-0.05", "fee": "0"},
-                "L2": {"refid": "ABC123", "amount": "125.00", "fee": "0.32"},
+                "L1": {"refid": "T1", "amount": "-0.05", "fee": "0"},
+                "L2": {"refid": "T1", "amount": "125.00", "fee": "0.32"},
             }
         )
 
@@ -101,12 +103,15 @@ class TestGetFilledOrder:
         assert filled.fee_quote == 0.32
 
     async def test_sums_across_split_fills(self, trading, mock_kraken_client):
+        mock_kraken_client._request.return_value = {
+            "trades": {"T1": {"ordertxid": "ABC123"}, "T2": {"ordertxid": "ABC123"}}
+        }
         mock_kraken_client.get_ledger_entries = AsyncMock(
             return_value={
-                "L1": {"refid": "ABC123", "amount": "0.03", "fee": "0.0001"},
-                "L2": {"refid": "ABC123", "amount": "0.02", "fee": "0.0001"},
-                "L3": {"refid": "ABC123", "amount": "-75.00", "fee": "0"},
-                "L4": {"refid": "ABC123", "amount": "-50.00", "fee": "0"},
+                "L1": {"refid": "T1", "amount": "0.03", "fee": "0.0001"},
+                "L2": {"refid": "T2", "amount": "0.02", "fee": "0.0001"},
+                "L3": {"refid": "T1", "amount": "-75.00", "fee": "0"},
+                "L4": {"refid": "T2", "amount": "-50.00", "fee": "0"},
             }
         )
 
@@ -117,12 +122,13 @@ class TestGetFilledOrder:
         assert filled.fee_base == pytest.approx(0.0002)
         assert filled.gross_quote == 125.00
 
-    async def test_ignores_entries_with_other_refids(self, trading, mock_kraken_client):
+    async def test_ignores_entries_from_unrelated_trades(self, trading, mock_kraken_client):
+        mock_kraken_client._request.return_value = {"trades": {"T1": {"ordertxid": "ABC123"}}}
         mock_kraken_client.get_ledger_entries = AsyncMock(
             return_value={
-                "L1": {"refid": "OTHER", "amount": "1.0", "fee": "0.01"},
-                "L2": {"refid": "ABC123", "amount": "0.05", "fee": "0.0002"},
-                "L3": {"refid": "ABC123", "amount": "-125.00", "fee": "0"},
+                "L1": {"refid": "TOTHER", "amount": "1.0", "fee": "0.01"},
+                "L2": {"refid": "T1", "amount": "0.05", "fee": "0.0002"},
+                "L3": {"refid": "T1", "amount": "-125.00", "fee": "0"},
             }
         )
 
@@ -130,11 +136,43 @@ class TestGetFilledOrder:
 
         assert filled.gross_base == 0.05
 
+    async def test_ignores_trades_from_other_orders(self, trading, mock_kraken_client):
+        mock_kraken_client._request.return_value = {
+            "trades": {
+                "T1": {"ordertxid": "ABC123"},
+                "T2": {"ordertxid": "OTHER_ORDER"},
+            }
+        }
+        mock_kraken_client.get_ledger_entries = AsyncMock(
+            return_value={
+                "L1": {"refid": "T1", "amount": "0.05", "fee": "0.0002"},
+                "L2": {"refid": "T1", "amount": "-125.00", "fee": "0"},
+                "L3": {"refid": "T2", "amount": "1.0", "fee": "0.01"},
+                "L4": {"refid": "T2", "amount": "-2000.00", "fee": "0"},
+            }
+        )
+
+        filled = await trading.get_filled_order("ABC123", side="buy")
+
+        assert filled.gross_base == 0.05
+        assert filled.gross_quote == 125.00
+
     async def test_returns_none_for_empty_txid_list(self, trading):
         assert await trading.get_filled_order([], side="buy") is None
 
-    async def test_returns_none_when_no_entries_appear(self, trading, mock_kraken_client, mocker):
+    async def test_returns_none_when_trades_history_empty(
+        self, trading, mock_kraken_client, mocker
+    ):
         mocker.patch("src.kraken.trading.asyncio.sleep", new_callable=AsyncMock)
+        mock_kraken_client._request.return_value = {"trades": {}}
+
+        filled = await trading.get_filled_order("ABC123", side="buy", max_attempts=2)
+
+        assert filled is None
+
+    async def test_returns_none_when_ledger_empty(self, trading, mock_kraken_client, mocker):
+        mocker.patch("src.kraken.trading.asyncio.sleep", new_callable=AsyncMock)
+        mock_kraken_client._request.return_value = {"trades": {"T1": {"ordertxid": "ABC123"}}}
         mock_kraken_client.get_ledger_entries = AsyncMock(return_value={})
 
         filled = await trading.get_filled_order("ABC123", side="buy", max_attempts=2)
@@ -143,13 +181,14 @@ class TestGetFilledOrder:
 
     async def test_polls_until_entries_appear(self, trading, mock_kraken_client, mocker):
         mocker.patch("src.kraken.trading.asyncio.sleep", new_callable=AsyncMock)
+        mock_kraken_client._request.return_value = {"trades": {"T1": {"ordertxid": "ABC123"}}}
         mock_kraken_client.get_ledger_entries = AsyncMock(
             side_effect=[
                 {},
                 {},
                 {
-                    "L1": {"refid": "ABC123", "amount": "0.05", "fee": "0.0002"},
-                    "L2": {"refid": "ABC123", "amount": "-125.00", "fee": "0"},
+                    "L1": {"refid": "T1", "amount": "0.05", "fee": "0.0002"},
+                    "L2": {"refid": "T1", "amount": "-125.00", "fee": "0"},
                 },
             ]
         )
