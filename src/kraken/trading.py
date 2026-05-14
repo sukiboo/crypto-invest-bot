@@ -88,19 +88,28 @@ class KrakenTrading:
     ) -> FilledOrder | None:
         """Resolve a placed order to the precise values posted to the ledger.
 
-        Polls `/0/private/Ledgers` until trade entries with `refid == txid` appear
-        (typically one per side; more if the order was split into multiple fills).
-        Returns gross/fee on both sides of the trade as recorded by Kraken — no
-        approximations. Returns None if no matching entries surface within the
-        retry budget."""
+        `/AddOrder` returns an order ID (`O...`), but ledger trade entries reference
+        trades by trade ID (`T...`). Polls `/0/private/TradesHistory` to map the
+        order ID to its trade IDs, then `/0/private/Ledgers` for the entries whose
+        `refid` matches. Returns gross/fee on both sides of the trade as recorded by
+        Kraken — no approximations. Returns None if no matching entries surface
+        within the retry budget."""
         if isinstance(txid, list):
             if not txid:
                 return None
             txid = txid[0]
 
         async def _fetch_filled_order() -> FilledOrder | None:
+            trades_result = await self.client._request("/0/private/TradesHistory")
+            trade_ids = {
+                tid
+                for tid, t in trades_result.get("trades", {}).items()
+                if t.get("ordertxid") == txid
+            }
+            if not trade_ids:
+                return None
             entries = await self.client.get_ledger_entries(ledger_type="trade")
-            matches = [e for e in entries.values() if e.get("refid") == txid]
+            matches = [e for e in entries.values() if e.get("refid") in trade_ids]
             received = [e for e in matches if float(e.get("amount", 0)) > 0]
             paid = [e for e in matches if float(e.get("amount", 0)) < 0]
             if not (received and paid):
