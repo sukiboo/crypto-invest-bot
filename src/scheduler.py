@@ -22,16 +22,6 @@ class JobScheduler:
         action: ActionConfig,
         callback: Callable[[ActionConfig], Awaitable[Any]],
     ) -> str:
-        """
-        Schedule an action to run on its cron schedule.
-
-        Args:
-            action: The action configuration
-            callback: Async function to call when triggered
-
-        Returns:
-            The job ID
-        """
         try:
             trigger = CronTrigger.from_crontab(action.schedule)
         except ValueError as e:
@@ -48,24 +38,9 @@ class JobScheduler:
             name=action.name,
             replace_existing=True,
         )
-
         self._jobs[action.name] = job.id
-        logger.info(
-            "Scheduled action '%s' with cron '%s'",
-            action.name,
-            action.schedule,
-        )
-
+        logger.info("Scheduled action '%s' with cron '%s'", action.name, action.schedule)
         return job.id
-
-    def remove_action(self, action_name: str) -> bool:
-        job_id = self._jobs.get(action_name)
-        if job_id:
-            self.scheduler.remove_job(job_id)
-            del self._jobs[action_name]
-            logger.info("Removed action '%s' from scheduler", action_name)
-            return True
-        return False
 
     def start(self) -> None:
         if not self.scheduler.running:

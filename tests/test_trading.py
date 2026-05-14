@@ -11,95 +11,151 @@ def trading(mock_kraken_client):
 
 
 class TestPlaceMarketOrder:
-    async def test_buy_order_sets_viqc_flag(self, trading, mock_kraken_client):
+    async def test_buy_order_sets_viqc_fcib_flags(self, trading, mock_kraken_client):
         mock_kraken_client._request.return_value = {"txid": ["ABC123"]}
 
         await trading.place_market_order(pair="ETHUSD", side="buy", amount=100.0)
 
-        call_args = mock_kraken_client._request.call_args
-        data = call_args.kwargs["data"]
-        assert data["oflags"] == "viqc"
+        data = mock_kraken_client._request.call_args.kwargs["data"]
+        assert data["oflags"] == "viqc,fcib"
         assert data["volume"] == "100.0"
 
-    async def test_sell_order_no_viqc_flag(self, trading, mock_kraken_client):
+    async def test_sell_order_no_oflags(self, trading, mock_kraken_client):
         mock_kraken_client._request.return_value = {"txid": ["ABC123"]}
 
         await trading.place_market_order(pair="ETHUSD", side="sell", amount=0.5)
 
-        call_args = mock_kraken_client._request.call_args
-        data = call_args.kwargs["data"]
+        data = mock_kraken_client._request.call_args.kwargs["data"]
         assert "oflags" not in data
         assert data["volume"] == "0.5"
 
+    async def test_buy_with_amount_none_spends_full_quote_balance(
+        self, trading, mock_kraken_client
+    ):
+        mock_kraken_client.get_pair_symbols = AsyncMock(return_value=("ETH", "USD"))
+        mock_kraken_client.get_asset_balance = AsyncMock(return_value=100.0)
+        mock_kraken_client._request.return_value = {"txid": ["ABC123"]}
 
-class TestGetFilledOrderDetails:
-    async def test_returns_values_when_order_closed(self, trading, mock_kraken_client):
-        mock_kraken_client._request.return_value = {
-            "ABC123": {
-                "status": "closed",
-                "vol_exec": "0.05",
-                "price": "2500.00",
+        await trading.place_market_order(pair="ETHUSD", side="buy", amount=None)
+
+        mock_kraken_client.get_asset_balance.assert_awaited_once_with("USD")
+        data = mock_kraken_client._request.call_args.kwargs["data"]
+        assert data["volume"] == "100.0"
+        assert data["oflags"] == "viqc,fcib"
+
+    async def test_sell_with_amount_none_dumps_full_base_balance(self, trading, mock_kraken_client):
+        mock_kraken_client.get_pair_symbols = AsyncMock(return_value=("ETH", "USD"))
+        mock_kraken_client.get_asset_balance = AsyncMock(return_value=2.5)
+        mock_kraken_client._request.return_value = {"txid": ["XYZ"]}
+
+        await trading.place_market_order(pair="ETHUSD", side="sell", amount=None)
+
+        mock_kraken_client.get_asset_balance.assert_awaited_once_with("ETH")
+        data = mock_kraken_client._request.call_args.kwargs["data"]
+        assert data["volume"] == "2.5"
+        assert "oflags" not in data
+
+    async def test_skipped_when_balance_is_zero(self, trading, mock_kraken_client):
+        mock_kraken_client.get_pair_symbols = AsyncMock(return_value=("ETH", "USD"))
+        mock_kraken_client.get_asset_balance = AsyncMock(return_value=0.0)
+
+        result = await trading.place_market_order(pair="ETHUSD", side="buy", amount=None)
+
+        assert result == {}
+        mock_kraken_client._request.assert_not_called()
+
+
+class TestGetFilledOrder:
+    async def test_buy_reads_base_and_quote_from_ledger(self, trading, mock_kraken_client):
+        mock_kraken_client.get_ledger_entries = AsyncMock(
+            return_value={
+                "L1": {"refid": "ABC123", "amount": "0.05", "fee": "0.0002"},
+                "L2": {"refid": "ABC123", "amount": "-125.00", "fee": "0"},
             }
-        }
+        )
 
-        vol_exec, price = await trading.get_filled_order_details("ABC123")
+        filled = await trading.get_filled_order("ABC123", side="buy")
 
-        assert vol_exec == "0.05"
-        assert price == 2500.00
+        assert filled is not None
+        assert filled.gross_base == 0.05
+        assert filled.fee_base == 0.0002
+        assert filled.gross_quote == 125.00
+        assert filled.fee_quote == 0.0
 
-    async def test_returns_none_for_zero_vol_exec(self, trading, mock_kraken_client):
-        mock_kraken_client._request.return_value = {
-            "ABC123": {
-                "status": "closed",
-                "vol_exec": "0",
-                "price": "2500.00",
+    async def test_sell_swaps_received_and_paid_sides(self, trading, mock_kraken_client):
+        # On a sell, the positive ledger entry is the quote credit (with quote fee)
+        # and the negative entry is the base debit (no fee since fcib is buy-only).
+        mock_kraken_client.get_ledger_entries = AsyncMock(
+            return_value={
+                "L1": {"refid": "ABC123", "amount": "-0.05", "fee": "0"},
+                "L2": {"refid": "ABC123", "amount": "125.00", "fee": "0.32"},
             }
-        }
+        )
 
-        vol_exec, price = await trading.get_filled_order_details("ABC123")
+        filled = await trading.get_filled_order("ABC123", side="sell")
 
-        assert vol_exec is None
-        assert price == 2500.00
+        assert filled is not None
+        assert filled.gross_base == 0.05
+        assert filled.fee_base == 0.0
+        assert filled.gross_quote == 125.00
+        assert filled.fee_quote == 0.32
 
-    async def test_returns_none_for_empty_vol_exec(self, trading, mock_kraken_client):
-        mock_kraken_client._request.return_value = {
-            "ABC123": {
-                "status": "closed",
-                "vol_exec": "",
-                "price": "2500.00",
+    async def test_sums_across_split_fills(self, trading, mock_kraken_client):
+        mock_kraken_client.get_ledger_entries = AsyncMock(
+            return_value={
+                "L1": {"refid": "ABC123", "amount": "0.03", "fee": "0.0001"},
+                "L2": {"refid": "ABC123", "amount": "0.02", "fee": "0.0001"},
+                "L3": {"refid": "ABC123", "amount": "-75.00", "fee": "0"},
+                "L4": {"refid": "ABC123", "amount": "-50.00", "fee": "0"},
             }
-        }
+        )
 
-        vol_exec, price = await trading.get_filled_order_details("ABC123")
+        filled = await trading.get_filled_order("ABC123", side="buy")
 
-        assert vol_exec is None
+        assert filled is not None
+        assert filled.gross_base == pytest.approx(0.05)
+        assert filled.fee_base == pytest.approx(0.0002)
+        assert filled.gross_quote == 125.00
 
-    async def test_returns_none_for_zero_price(self, trading, mock_kraken_client):
-        mock_kraken_client._request.return_value = {
-            "ABC123": {
-                "status": "closed",
-                "vol_exec": "0.05",
-                "price": "0",
+    async def test_ignores_entries_with_other_refids(self, trading, mock_kraken_client):
+        mock_kraken_client.get_ledger_entries = AsyncMock(
+            return_value={
+                "L1": {"refid": "OTHER", "amount": "1.0", "fee": "0.01"},
+                "L2": {"refid": "ABC123", "amount": "0.05", "fee": "0.0002"},
+                "L3": {"refid": "ABC123", "amount": "-125.00", "fee": "0"},
             }
-        }
+        )
 
-        vol_exec, price = await trading.get_filled_order_details("ABC123")
+        filled = await trading.get_filled_order("ABC123", side="buy")
 
-        assert vol_exec == "0.05"
-        assert price is None
+        assert filled.gross_base == 0.05
 
-    async def test_retries_until_closed(self, trading, mock_kraken_client, mocker):
+    async def test_returns_none_for_empty_txid_list(self, trading):
+        assert await trading.get_filled_order([], side="buy") is None
+
+    async def test_returns_none_when_no_entries_appear(self, trading, mock_kraken_client, mocker):
         mocker.patch("src.kraken.trading.asyncio.sleep", new_callable=AsyncMock)
+        mock_kraken_client.get_ledger_entries = AsyncMock(return_value={})
 
-        # First two calls return pending, third returns closed
-        mock_kraken_client._request.side_effect = [
-            {"ABC123": {"status": "pending", "vol_exec": "", "price": ""}},
-            {"ABC123": {"status": "open", "vol_exec": "", "price": ""}},
-            {"ABC123": {"status": "closed", "vol_exec": "0.05", "price": "2500.00"}},
-        ]
+        filled = await trading.get_filled_order("ABC123", side="buy", max_attempts=2)
 
-        vol_exec, price = await trading.get_filled_order_details("ABC123", max_attempts=5)
+        assert filled is None
 
-        assert mock_kraken_client._request.call_count == 3
-        assert vol_exec == "0.05"
-        assert price == 2500.00
+    async def test_polls_until_entries_appear(self, trading, mock_kraken_client, mocker):
+        mocker.patch("src.kraken.trading.asyncio.sleep", new_callable=AsyncMock)
+        mock_kraken_client.get_ledger_entries = AsyncMock(
+            side_effect=[
+                {},
+                {},
+                {
+                    "L1": {"refid": "ABC123", "amount": "0.05", "fee": "0.0002"},
+                    "L2": {"refid": "ABC123", "amount": "-125.00", "fee": "0"},
+                },
+            ]
+        )
+
+        filled = await trading.get_filled_order("ABC123", side="buy", max_attempts=5)
+
+        assert mock_kraken_client.get_ledger_entries.call_count == 3
+        assert filled is not None
+        assert filled.gross_base == 0.05

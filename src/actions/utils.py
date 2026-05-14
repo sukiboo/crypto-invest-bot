@@ -6,14 +6,17 @@ from apscheduler.triggers.cron import CronTrigger
 from src.kraken import KrakenClient
 from src.schemas import ActionConfig
 
+# (action_name, per-fire amount, fire count within the window)
+BuyForecast = list[tuple[str, float, int]]
+
 
 async def upcoming_buys_by_quote(
     actions: Iterable[ActionConfig],
     kraken_client: KrakenClient,
     now: datetime,
     end: datetime,
-) -> dict[str, list[tuple[str, float, int]]]:
-    by_quote: dict[str, list[tuple[str, float, int]]] = {}
+) -> dict[str, BuyForecast]:
+    by_quote: dict[str, BuyForecast] = {}
     for a in actions:
         if a.type != "order" or a.side != "buy" or a.amount is None or a.pair is None:
             continue

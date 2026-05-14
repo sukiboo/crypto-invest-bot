@@ -4,10 +4,10 @@ import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PAIR_PATTERN = re.compile(r"^[A-Z0-9]{5,12}$")
 ASSET_PATTERN = re.compile(r"^[A-Z0-9]{2,6}$")
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ActionType = Literal["order", "earn", "check_runway", "maintain_reserve"]
 OrderType = Literal["market", "limit"]
@@ -54,12 +54,7 @@ class ActionConfig(BaseModel):
                 raise ValueError(f"Action '{self.name}': 'pair' is required for order actions")
             if not PAIR_PATTERN.match(self.pair):
                 raise ValueError(f"Action '{self.name}': invalid pair format '{self.pair}'")
-            if self.amount is None:
-                if self.side != "buy":
-                    raise ValueError(
-                        f"Action '{self.name}': 'amount=None' is only supported for buy orders"
-                    )
-            elif self.amount <= 0:
+            if self.amount is not None and self.amount <= 0:
                 raise ValueError(f"Action '{self.name}': 'amount' must be positive if specified")
         elif self.type == "earn":
             if not self.asset:

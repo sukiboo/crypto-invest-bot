@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 from src.kraken.client import KrakenClient
+from src.schemas import EarnLockType
 
 logger = logging.getLogger(__name__)
 
@@ -12,235 +13,115 @@ class KrakenEarn:
 
     @staticmethod
     def _find_balance_key(asset: str, balance: dict[str, str]) -> str | None:
-        for variant in [asset, f"X{asset}", f"XX{asset}"]:
+        for variant in (asset, f"X{asset}", f"XX{asset}"):
             if variant in balance:
                 return variant
         return None
 
     async def get_strategies(self, asset: str | None = None) -> list[dict[str, Any]]:
-        """
-        Get available earn strategies.
-
-        Args:
-            asset: Exact Kraken asset name (e.g., "ETH", "XBT")
-
-        Returns:
-            List of available strategies
-        """
-        data = {}
-        if asset:
-            data["asset"] = asset
-
-        result = await self.client._request("POST", "/0/private/Earn/Strategies", data)
+        data = {"asset": asset} if asset else {}
+        result = await self.client._request("/0/private/Earn/Strategies", data)
         return result.get("items", [])
 
     async def find_strategy(
-        self, asset: str, strategy_type: str | None = None
+        self, asset: str, strategy_type: EarnLockType | None = None
     ) -> dict[str, Any] | None:
-        """
-        Find a matching earn strategy for an asset.
-
-        Args:
-            asset: Exact Kraken asset name (e.g., "ETH", "XBT")
-            strategy_type: Optional type filter (e.g., "bonded", "flexible")
-
-        Returns:
-            The matching strategy or None
-        """
         strategies = await self.get_strategies(asset)
-
         if not strategies:
             logger.warning("No earn strategies found for %s", asset)
             return None
+        if strategy_type is None:
+            return strategies[0]
 
-        # If a specific type is requested, try to find it
-        if strategy_type:
-            strategy_type_lower = strategy_type.lower()
+        def lock(s: dict[str, Any]) -> str:
+            return s.get("lock_type", {}).get("type", "")
 
-            # "restaked" = bonded with longest unbonding period
-            # For most coins this is the same as "bonded", but for ETH it's the restaking option
-            if strategy_type_lower == "restaked":
-                bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
-                if bonded:
-                    return max(
-                        bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
-                    )
+        def unbonding(s: dict[str, Any]) -> float:
+            return s.get("lock_type", {}).get("unbonding_period", 0)
+
+        # "bonded" = shortest unbonding; "restaked" = longest (ETH's restaking option).
+        # For most assets only one bonded strategy exists, so min == max.
+        if strategy_type in ("bonded", "restaked"):
+            bonded = [s for s in strategies if lock(s) == "bonded"]
+            if not bonded:
                 logger.warning("No bonded strategies found for %s", asset)
                 return None
+            pick = max if strategy_type == "restaked" else min
+            return pick(bonded, key=unbonding)
 
-            # "bonded" = bonded with shortest unbonding period
-            # For most coins this is the only bonded option
-            if strategy_type_lower == "bonded":
-                bonded = [s for s in strategies if s.get("lock_type", {}).get("type") == "bonded"]
-                if bonded:
-                    return min(
-                        bonded, key=lambda s: s.get("lock_type", {}).get("unbonding_period", 0)
-                    )
-                logger.warning("No bonded strategies found for %s", asset)
-                return None
-
-            # "flexible" (user-facing) maps to Kraken's "flex" lock type
-            if strategy_type_lower == "flexible":
-                for strategy in strategies:
-                    lock_type = strategy.get("lock_type", {}).get("type", "").lower()
-                    if lock_type == "flex":
-                        return strategy
-                logger.warning("No flexible strategies found for %s", asset)
-                return None
-
-            logger.warning(
-                "Strategy type '%s' not found for %s, available: %s",
-                strategy_type,
-                asset,
-                [s.get("lock_type", {}).get("type") for s in strategies],
-            )
-            return None
-
-        # Return the first available strategy
-        return strategies[0] if strategies else None
+        # "flexible" (user-facing) maps to Kraken's "flex" lock type.
+        flex = next((s for s in strategies if lock(s) == "flex"), None)
+        if flex is None:
+            logger.warning("No flexible strategies found for %s", asset)
+        return flex
 
     async def allocate(self, strategy_id: str, amount: float, asset: str) -> dict[str, Any]:
-        """
-        Allocate funds to an earn strategy (stake).
-
-        Args:
-            strategy_id: The strategy ID to allocate to
-            amount: Amount to allocate (in the asset's units)
-            asset: The asset name for logging purposes
-
-        Returns:
-            Allocation result
-        """
-        data = {
-            "strategy_id": strategy_id,
-            "amount": str(amount),
-        }
-
         logger.info("Allocating %s %s to strategy %s", amount, asset, strategy_id)
-
-        result = await self.client._request("POST", "/0/private/Earn/Allocate", data)
-
-        logger.info("Allocation successful: %s", result)
-        return result
+        return await self.client._request(
+            "/0/private/Earn/Allocate",
+            data={"strategy_id": strategy_id, "amount": str(amount)},
+        )
 
     async def deallocate(self, strategy_id: str, amount: float) -> dict[str, Any]:
-        """
-        Deallocate funds from an earn strategy (unstake).
-
-        Args:
-            strategy_id: The strategy ID to deallocate from
-            amount: Amount to deallocate
-
-        Returns:
-            Deallocation result
-        """
-        data = {
-            "strategy_id": strategy_id,
-            "amount": str(amount),
-        }
-
-        return await self.client._request("POST", "/0/private/Earn/Deallocate", data)
+        return await self.client._request(
+            "/0/private/Earn/Deallocate",
+            data={"strategy_id": strategy_id, "amount": str(amount)},
+        )
 
     async def get_allocations(self) -> dict[str, Any]:
-        return await self.client._request("POST", "/0/private/Earn/Allocations")
+        return await self.client._request("/0/private/Earn/Allocations")
 
     async def get_allocations_by_asset(self) -> dict[str, float]:
-        """Sum native bonded allocations per asset, excluding flexible strategies.
-
-        Flexible (auto-flex) allocations are skipped because Kraken already reports
-        their balance as spendable in /Balance, so adding them again double-counts.
-        """
+        # Flexible (auto-flex) allocations are skipped because Kraken already reports
+        # their balance as spendable in /Balance, so counting them again double-counts.
         strategies = await self.get_strategies()
-        flexible_ids = {
-            s["id"] for s in strategies if s.get("lock_type", {}).get("type", "").lower() == "flex"
-        }
-        allocations = await self.get_allocations()
+        flexible_ids = {s["id"] for s in strategies if s.get("lock_type", {}).get("type") == "flex"}
+
         by_asset: dict[str, float] = {}
-        for item in allocations.get("items", []):
+        for item in (await self.get_allocations()).get("items", []):
             asset = item.get("native_asset")
-            strategy_id = item.get("strategy_id")
-            if not asset:
+            if not asset or item.get("strategy_id") in flexible_ids:
                 continue
             total = float(item.get("amount_allocated", {}).get("total", {}).get("native") or 0)
-            if total <= 0:
-                continue
-            is_flex = strategy_id in flexible_ids
-            logger.info(
-                "Earn allocation: asset=%s strategy=%s amount=%s flexible=%s",
-                asset,
-                strategy_id,
-                total,
-                is_flex,
-            )
-            if is_flex:
-                continue
-            by_asset[asset] = by_asset.get(asset, 0.0) + total
+            if total > 0:
+                by_asset[asset] = by_asset.get(asset, 0.0) + total
         return by_asset
 
     async def get_strategy_holdings(self, strategy_id: str) -> dict[str, float]:
-        """
-        Return {'bonded': float, 'pending_unstake': float} for a given strategy.
-        bonded = total amount currently allocated to the strategy
-        pending_unstake = amount in the unbonding window
-        """
-        allocations = await self.get_allocations()
-        for item in allocations.get("items", []):
+        # bonded = total amount allocated; pending_unstake = amount in unbonding window.
+        for item in (await self.get_allocations()).get("items", []):
             if item.get("strategy_id") != strategy_id:
                 continue
             allocated = item.get("amount_allocated", {})
-            total = float(allocated.get("total", {}).get("native") or 0)
-            unbonding = float(allocated.get("unbonding", {}).get("native") or 0)
-            return {"bonded": total, "pending_unstake": unbonding}
+            return {
+                "bonded": float(allocated.get("total", {}).get("native") or 0),
+                "pending_unstake": float(allocated.get("unbonding", {}).get("native") or 0),
+            }
         return {"bonded": 0.0, "pending_unstake": 0.0}
 
     async def get_allocation_status(self, strategy_id: str) -> dict[str, Any]:
         return await self.client._request(
-            "POST",
             "/0/private/Earn/AllocateStatus",
             data={"strategy_id": strategy_id},
         )
 
     async def stake_asset(
-        self, asset: str, amount: float | None = None, strategy_type: str | None = None
+        self,
+        asset: str,
+        amount: float | None = None,
+        strategy_type: EarnLockType | None = None,
     ) -> dict[str, Any] | None:
-        """
-        Stake an asset to earn yield.
-
-        Args:
-            asset: Exact Kraken asset name (e.g., "ETH", "XBT")
-            amount: Amount to stake (None = stake all available balance)
-            strategy_type: Strategy type preference (e.g., "bonded")
-
-        Returns:
-            Allocation result or None if no strategy found
-        """
         strategy = await self.find_strategy(asset, strategy_type)
-
         if not strategy:
             logger.warning("Cannot stake %s: no matching strategy found", asset)
             return None
 
-        strategy_id = strategy["id"]
-        logger.info(
-            "Found strategy for %s: %s (%s)",
-            asset,
-            strategy_id,
-            strategy.get("lock_type", {}).get("type", "unknown"),
-        )
-
-        # If no amount specified, get available balance
         if amount is None:
-            balance = await self.client.get_balance()
-            balance_key = self._find_balance_key(asset, balance)
-            if not balance_key:
-                raise ValueError(
-                    f"Asset '{asset}' not found in balance. Available: {list(balance.keys())}"
-                )
-            amount = float(balance[balance_key])
+            amount = await self.client.get_asset_balance(asset)
             if amount <= 0:
                 logger.warning("No %s balance available to stake", asset)
                 return None
             logger.info("Staking all available %s: %s", asset, amount)
 
-        await self.allocate(strategy_id, amount, asset)
+        await self.allocate(strategy["id"], amount, asset)
         return {"amount": amount}

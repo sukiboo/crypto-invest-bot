@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from src.actions._helpers import upcoming_buys_by_quote
 from src.actions.base import Action, ActionContext
+from src.actions.utils import upcoming_buys_by_quote
 from src.schemas import ActionConfig
 
 ReserveOp = Literal["stake", "unstake", "skip"]

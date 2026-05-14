@@ -1,28 +1,34 @@
+import re
 from unittest.mock import AsyncMock
 
 import pytest
 
-from src.bot import CryptoInvestBot
+from src.actions.check_runway import CheckRunwayAction
 from src.schemas import ActionConfig
 
 
+async def _resolve_pair_symbols(pair: str) -> tuple[str, str]:
+    return {
+        "ETHUSD": ("ETH", "USD"),
+        "SOLUSD": ("SOL", "USD"),
+        "XBTUSD": ("XBT", "USD"),
+    }[pair]
+
+
 @pytest.fixture
-def bot(mocker):
-    mocker.patch("src.bot.KrakenClient")
-    mocker.patch("src.bot.KrakenTrading")
-    mocker.patch("src.bot.KrakenEarn")
-    mocker.patch("src.bot.TelegramNotifier")
-    mocker.patch("src.bot.JobScheduler")
-
-    settings = mocker.Mock()
-    settings.env = mocker.Mock()
-    settings.actions = []
-    settings.bot_name = "test-bot"
-
-    instance = CryptoInvestBot(settings)
-    instance.kraken_client.get_usd_balance = AsyncMock()
-    instance.telegram.send_alert = AsyncMock()
-    return instance
+def ctx(mocker):
+    ctx = mocker.Mock()
+    ctx.kraken_client = mocker.Mock()
+    ctx.kraken_client.get_pair_symbols = AsyncMock(side_effect=_resolve_pair_symbols)
+    ctx.kraken_client.get_balance = AsyncMock(return_value={})
+    ctx.kraken_client.get_asset_balance = AsyncMock(return_value=10_000.0)
+    ctx.earn = mocker.Mock()
+    ctx.earn.get_allocations_by_asset = AsyncMock(return_value={})
+    ctx.telegram = mocker.Mock()
+    ctx.telegram.send_alert = AsyncMock()
+    ctx.settings = mocker.Mock()
+    ctx.settings.actions = []
+    return ctx
 
 
 @pytest.fixture
@@ -41,31 +47,29 @@ def _buy(name, amount, schedule="0 12 * * *", pair="ETHUSD"):
     )
 
 
-class TestCheckRunway:
-    async def test_ok_when_balance_covers_required(self, bot, runway_action):
-        bot.settings.actions = [_buy("Buy ETH", 10.0)]
-        bot.kraken_client.get_usd_balance.return_value = 10_000.0
+class TestCheckRunwayAction:
+    async def test_quiet_alert_when_balance_covers_required(self, ctx, runway_action):
+        ctx.settings.actions = [_buy("Buy ETH", 10.0)]
+        ctx.kraken_client.get_asset_balance.return_value = 10_000.0
 
-        result = await bot._execute_check_runway(runway_action)
+        await CheckRunwayAction().execute(runway_action, ctx)
 
-        assert result["ok"] is True
-        assert bot.telegram.send_alert.call_args.kwargs["quiet"] is True
-        assert "runway ok" in bot.telegram.send_alert.call_args.args[0]
+        assert ctx.telegram.send_alert.call_args.kwargs["quiet"] is True
+        assert "runway ok" in ctx.telegram.send_alert.call_args.args[0]
 
-    async def test_low_when_balance_below_required(self, bot, runway_action):
-        bot.settings.actions = [_buy("Buy ETH", 10.0)]
-        bot.kraken_client.get_usd_balance.return_value = 5.0
+    async def test_loud_alert_when_balance_below_required(self, ctx, runway_action):
+        ctx.settings.actions = [_buy("Buy ETH", 10.0)]
+        ctx.kraken_client.get_asset_balance.return_value = 5.0
 
-        result = await bot._execute_check_runway(runway_action)
+        await CheckRunwayAction().execute(runway_action, ctx)
 
-        assert result["ok"] is False
-        assert bot.telegram.send_alert.call_args.kwargs["quiet"] is False
-        msg = bot.telegram.send_alert.call_args.args[0]
+        assert ctx.telegram.send_alert.call_args.kwargs["quiet"] is False
+        msg = ctx.telegram.send_alert.call_args.args[0]
         assert "runway low" in msg
         assert "Buy ETH" in msg
 
-    async def test_only_buy_orders_count_toward_required(self, bot, runway_action):
-        bot.settings.actions = [
+    async def test_non_buy_actions_excluded_from_required(self, ctx, runway_action):
+        ctx.settings.actions = [
             _buy("Buy ETH", 10.0),
             ActionConfig(
                 name="Sell BTC",
@@ -83,18 +87,16 @@ class TestCheckRunway:
                 strategy="flexible",
             ),
         ]
-        bot.kraken_client.get_usd_balance.return_value = 10_000.0
+        ctx.kraken_client.get_asset_balance.return_value = 10_000.0
 
-        result = await bot._execute_check_runway(runway_action)
+        await CheckRunwayAction().execute(runway_action, ctx)
 
-        # Daily $10 buy over 7 days ≈ $70; allow ±1 fire for clock boundary
-        assert 60.0 <= result["required"] <= 80.0
-        msg = bot.telegram.send_alert.call_args.args[0]
+        msg = ctx.telegram.send_alert.call_args.args[0]
         assert "Sell BTC" not in msg
         assert "Stake ETH" not in msg
 
-    async def test_no_buys_means_zero_required(self, bot, runway_action):
-        bot.settings.actions = [
+    async def test_no_buys_emits_quiet_empty_message(self, ctx, runway_action):
+        ctx.settings.actions = [
             ActionConfig(
                 name="Stake ETH",
                 type="earn",
@@ -103,34 +105,45 @@ class TestCheckRunway:
                 strategy="flexible",
             ),
         ]
-        bot.kraken_client.get_usd_balance.return_value = 0.0
 
-        result = await bot._execute_check_runway(runway_action)
+        await CheckRunwayAction().execute(runway_action, ctx)
 
-        assert result["required"] == 0.0
-        assert result["ok"] is True
-        assert bot.telegram.send_alert.call_args.kwargs["quiet"] is True
+        assert ctx.telegram.send_alert.call_args.kwargs["quiet"] is True
+        assert "no buy actions scheduled" in ctx.telegram.send_alert.call_args.args[0]
 
-    async def test_low_message_includes_breakdown_per_buy(self, bot, runway_action):
-        bot.settings.actions = [
+    async def test_message_includes_breakdown_per_buy(self, ctx, runway_action):
+        ctx.settings.actions = [
             _buy("Buy ETH", 25.0, pair="ETHUSD"),
             _buy("Buy SOL", 15.0, pair="SOLUSD"),
         ]
-        bot.kraken_client.get_usd_balance.return_value = 0.0
+        ctx.kraken_client.get_asset_balance.return_value = 0.0
 
-        await bot._execute_check_runway(runway_action)
+        await CheckRunwayAction().execute(runway_action, ctx)
 
-        msg = bot.telegram.send_alert.call_args.args[0]
+        msg = ctx.telegram.send_alert.call_args.args[0]
         assert "Buy ETH" in msg
         assert "Buy SOL" in msg
-        assert "$25.00" in msg
-        assert "$15.00" in msg
+        assert "25.00 USD" in msg
+        assert "15.00 USD" in msg
 
-    async def test_required_scales_with_amount_and_frequency(self, bot, runway_action):
-        # Twice-daily $50 buy over 7d ≈ $700 (allow ±1 fire)
-        bot.settings.actions = [_buy("Buy ETH", 50.0, schedule="0 0,12 * * *")]
-        bot.kraken_client.get_usd_balance.return_value = 10_000.0
+    async def test_required_scales_with_amount_and_frequency(self, ctx, runway_action):
+        # Twice-daily $50 buy over 7d ≈ 14 fires (allow ±1 for clock boundary)
+        ctx.settings.actions = [_buy("Buy ETH", 50.0, schedule="0 0,12 * * *")]
+        ctx.kraken_client.get_asset_balance.return_value = 10_000.0
 
-        result = await bot._execute_check_runway(runway_action)
+        await CheckRunwayAction().execute(runway_action, ctx)
 
-        assert 650.0 <= result["required"] <= 750.0
+        msg = ctx.telegram.send_alert.call_args.args[0]
+        match = re.search(r"Buy ETH: (\d+) x 50\.00", msg)
+        assert match is not None
+        assert 13 <= int(match.group(1)) <= 14
+
+    async def test_earn_balance_counts_toward_available(self, ctx, runway_action):
+        ctx.settings.actions = [_buy("Buy ETH", 100.0)]
+        # Spot only $50 (less than 7*100 required), but earn allocations cover the rest
+        ctx.kraken_client.get_asset_balance.return_value = 50.0
+        ctx.earn.get_allocations_by_asset.return_value = {"ZUSD": 5_000.0}
+
+        await CheckRunwayAction().execute(runway_action, ctx)
+
+        assert ctx.telegram.send_alert.call_args.kwargs["quiet"] is True

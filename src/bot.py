@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import signal
-from typing import Any
 
 from src.actions import ACTIONS, ActionContext
 from src.kraken import KrakenClient, KrakenEarn, KrakenTrading
@@ -40,21 +39,15 @@ class CryptoInvestBot:
             settings=settings,
         )
 
-    async def execute_action(self, config: ActionConfig) -> dict[str, Any]:
-        result: dict[str, Any] = {"action": config.name, "type": config.type, "success": False}
-
+    async def execute_action(self, config: ActionConfig) -> None:
         try:
             logger.info("Executing action: %s [%s]", config.name, config.type)
             details = await ACTIONS[config.type].execute(config, self.ctx)
-            result["success"] = True
             if details is not None:
                 await self.telegram.send_update(f"{config.name}: {details}")
         except Exception as e:
             logger.exception("Action '%s' failed: %s", config.name, e)
-            result["error"] = str(e)
             await self.telegram.send_alert(f"{config.name}: {e}")
-
-        return result
 
     def _setup_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()

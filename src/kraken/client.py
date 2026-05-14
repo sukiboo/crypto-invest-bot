@@ -11,6 +11,8 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+REQUEST_TIMEOUT = 30.0
+
 
 class KrakenClient:
     BASE_URL = "https://api.kraken.com"
@@ -32,7 +34,6 @@ class KrakenClient:
             await self._session.close()
 
     def _generate_signature(self, url_path: str, data: dict, nonce: int) -> str:
-        """Generate HMAC-SHA512 signature for Kraken API authentication."""
         post_data = urllib.parse.urlencode(data)
         encoded = (str(nonce) + post_data).encode()
         message = url_path.encode() + hashlib.sha256(encoded).digest()
@@ -42,11 +43,9 @@ class KrakenClient:
 
     async def _request(
         self,
-        method: str,
         endpoint: str,
         data: dict | None = None,
         private: bool = True,
-        timeout: float = 30.0,
     ) -> dict[str, Any]:
         url = f"{self.BASE_URL}{endpoint}"
         headers: dict[str, str] = {}
@@ -60,17 +59,13 @@ class KrakenClient:
                 headers["API-Sign"] = self._generate_signature(endpoint, request_data, nonce)
 
             session = await self._get_session()
-            client_timeout = aiohttp.ClientTimeout(total=timeout)
-            async with session.post(
-                url, data=request_data, headers=headers, timeout=client_timeout
-            ) as response:
-                result = await response.json()
-
+            timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
+            async with session.post(url, data=request_data, headers=headers, timeout=timeout) as r:
+                result = await r.json()
                 if result.get("error"):
                     error_msg = ", ".join(result["error"])
                     logger.error("Kraken API error: %s", error_msg)
                     raise KrakenAPIError(error_msg)
-
                 return result.get("result", {})
 
         try:
@@ -83,7 +78,7 @@ class KrakenClient:
             raise KrakenAPIError(f"HTTP request failed: {e}") from e
 
     async def get_balance(self) -> dict[str, str]:
-        return await self._request("POST", "/0/private/Balance")
+        return await self._request("/0/private/Balance")
 
     async def get_asset_balance(self, asset: str, balance: dict[str, str] | None = None) -> float:
         if balance is None:
@@ -93,50 +88,29 @@ class KrakenClient:
                 return float(balance[variant])
         return 0.0
 
-    async def get_usd_balance(self) -> float:
-        return await self.get_asset_balance("USD")
-
-    async def get_ticker(self, pair: str) -> dict[str, Any]:
-        return await self._request("POST", "/0/public/Ticker", data={"pair": pair}, private=False)
+    async def get_ledger_entries(self, ledger_type: str | None = None) -> dict[str, Any]:
+        data = {"type": ledger_type} if ledger_type is not None else {}
+        result = await self._request("/0/private/Ledgers", data=data)
+        return result.get("ledger", {})
 
     async def _get_asset_pairs_metadata(self) -> dict[str, dict[str, Any]]:
         if self._asset_pairs is None:
-            self._asset_pairs = await self._request("POST", "/0/public/AssetPairs", private=False)
+            self._asset_pairs = await self._request("/0/public/AssetPairs", private=False)
         return self._asset_pairs  # type: ignore[return-value]
 
     async def get_asset_pairs(self) -> set[str]:
         metadata = await self._get_asset_pairs_metadata()
-        pairs: set[str] = set(metadata.keys())
-        for v in metadata.values():
-            altname = v.get("altname")
-            if isinstance(altname, str):
-                pairs.add(altname)
+        pairs = set(metadata.keys())
+        pairs.update(v["altname"] for v in metadata.values() if isinstance(v.get("altname"), str))
         return pairs
 
-    async def get_pair_quote(self, pair: str) -> str:
-        metadata = await self._get_asset_pairs_metadata()
-        entry: dict[str, Any] | None = metadata.get(pair)
-        if entry is None:
-            entry = next(
-                (v for v in metadata.values() if v.get("altname") == pair),
-                None,
-            )
-        if entry is None:
-            raise ValueError(f"Unknown trading pair: {pair}")
-        quote = entry.get("quote")
-        if not quote:
-            raise ValueError(f"Pair '{pair}' missing 'quote' field in AssetPairs response")
-        return quote
-
     async def get_pair_symbols(self, pair: str) -> tuple[str, str]:
-        """Return (base, quote) display symbols from AssetPairs `wsname` (e.g. 'ETH', 'USD')."""
+        # Returns (base, quote) display symbols parsed from AssetPairs `wsname`
+        # (e.g. 'ETH', 'USD'). Accepts either the canonical pair key or its altname.
         metadata = await self._get_asset_pairs_metadata()
-        entry: dict[str, Any] | None = metadata.get(pair)
-        if entry is None:
-            entry = next(
-                (v for v in metadata.values() if v.get("altname") == pair),
-                None,
-            )
+        entry = metadata.get(pair) or next(
+            (v for v in metadata.values() if v.get("altname") == pair), None
+        )
         if entry is None:
             raise ValueError(f"Unknown trading pair: {pair}")
         wsname = entry.get("wsname")

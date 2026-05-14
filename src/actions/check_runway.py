@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from src.actions._helpers import upcoming_buys_by_quote
 from src.actions.base import Action, ActionContext
+from src.actions.utils import BuyForecast, upcoming_buys_by_quote
 from src.schemas import ActionConfig
 
 
@@ -12,7 +12,7 @@ class RunwayLine:
     spot: float
     earn: float
     required: float
-    items: list[tuple[str, float, int]]
+    items: BuyForecast
 
     @property
     def total(self) -> float:
@@ -51,14 +51,13 @@ class CheckRunwayAction(Action):
             )
 
         all_ok = all(line.ok for line in lines)
-        await ctx.telegram.send_alert(_format(days, lines), quiet=all_ok)
+        await ctx.telegram.send_alert(_format(days, lines, all_ok), quiet=all_ok)
         return None
 
 
-def _format(days: int, lines: list[RunwayLine]) -> str:
+def _format(days: int, lines: list[RunwayLine], all_ok: bool) -> str:
     if not lines:
         return f"{days}d runway: no buy actions scheduled"
-    all_ok = all(line.ok for line in lines)
     out = [f"{days}d runway {'ok' if all_ok else 'low'}", "Balance"]
     for line in lines:
         cmp = ">" if line.ok else "<"

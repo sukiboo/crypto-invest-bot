@@ -50,21 +50,6 @@ class TestAddAction:
             scheduler.add_action(action, dummy_callback)
 
 
-class TestRemoveAction:
-    def test_removes_existing_job(self, scheduler, sample_action):
-        scheduler.add_action(sample_action, dummy_callback)
-
-        result = scheduler.remove_action("Buy ETH")
-
-        assert result is True
-        assert "Buy ETH" not in scheduler._jobs
-
-    def test_returns_false_for_nonexistent_job(self, scheduler):
-        result = scheduler.remove_action("nonexistent")
-
-        assert result is False
-
-
 class TestGetNextRunTimes:
     async def test_returns_iso_formatted_times(self, scheduler, sample_action):
         scheduler.add_action(sample_action, dummy_callback)

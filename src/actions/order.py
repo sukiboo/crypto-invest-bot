@@ -23,31 +23,34 @@ async def _format(
 ) -> str:
     if not order_result:
         return f"skipped {config.pair}: no quote balance"
-    vol_exec, price, cost, fee = await trading.get_filled_order_details(
-        order_result.get("txid", [])
-    )
     assert config.pair is not None
     base, quote = await trading.client.get_pair_symbols(config.pair)
-    # Buys use oflags=fcib, so the fee is deducted from the bought (base) asset, but
-    # Kraken's QueryOrders `fee` field reports the value in quote currency — convert
-    # via the avg fill price to get the base-denominated fee that hits the ledger.
-    if (
-        config.side == "buy"
-        and vol_exec
-        and fee is not None
-        and cost is not None
-        and price is not None
-    ):
-        net = float(vol_exec) - fee / price
-        vol_str = f"{net:.8f}".rstrip("0").rstrip(".")
-        price_str = f"{cost / net:.2f} {quote}/{base}" if net > 0 else "??"
+    filled = await trading.get_filled_order(order_result.get("txid", []), config.side)
+
+    if filled is None:
+        amount_str = (
+            f"{config.amount:.2f} {quote}"
+            if config.amount is not None
+            else f"all available {quote}"
+        )
+        return f"{config.side} ?? {base} for {amount_str} @ ??"
+
+    # Report what actually hit the wallet: for buys, the base credit is net of the
+    # base-side fee; for sells, the quote credit is net of the quote-side fee. The
+    # effective price uses the same net side, so price × volume reconciles to the
+    # gross paid/received.
+    if config.side == "buy":
+        vol = filled.gross_base - filled.fee_base
+        amount = filled.gross_quote
     else:
-        vol_str = vol_exec or "??"
-        price_str = f"{price:.2f} {quote}/{base}" if price else "??"
-    if config.amount is not None:
-        amount_str = f"{config.amount:.2f} {quote}"
-    elif cost is not None:
-        amount_str = f"{cost:.2f} {quote}"
-    else:
-        amount_str = f"all available {quote}"
+        vol = filled.gross_base
+        amount = filled.gross_quote - filled.fee_quote
+
+    vol_str = f"{vol:.8f}".rstrip("0").rstrip(".") if vol > 0 else "??"
+    price_str = f"{amount / vol:.2f} {quote}/{base}" if vol > 0 else "??"
+    amount_str = (
+        f"{config.amount:.2f} {quote}"
+        if config.side == "buy" and config.amount is not None
+        else f"{amount:.2f} {quote}"
+    )
     return f"{config.side} {vol_str} {base} for {amount_str} @ {price_str}"

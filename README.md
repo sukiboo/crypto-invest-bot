@@ -6,7 +6,7 @@ Automated scheduled crypto investing on Kraken with Telegram notifications.
 
 - **Scheduled Orders**: Buy/sell crypto on cron schedules (daily, weekly, etc.)
 - **Scheduled Staking**: Automatically stake assets to earn yield
-- **Cash Runway Check**: Proactive Telegram warning when USD balance won't cover upcoming buys
+- **Cash Runway Check**: Proactive Telegram warning when quote balances won't cover upcoming buys
 - **Telegram Alerts**: Get notified on successful actions and errors
 - **Docker Deployment**: Easy server deployment via SSH
 
@@ -27,9 +27,16 @@ crypto-invest-bot/
     ├── bot.py             # Main bot orchestrator
     ├── schemas.py         # Pydantic models
     ├── scheduler.py       # Cron job scheduler
+    ├── actions/
+    │   ├── base.py            # Action ABC + ActionContext
+    │   ├── order.py           # Buy/sell market orders
+    │   ├── earn.py            # Stake actions
+    │   ├── check_runway.py    # Quote-balance forecast
+    │   ├── maintain_reserve.py
+    │   └── utils.py           # Shared helpers (upcoming-buy forecast)
     ├── kraken/
     │   ├── client.py      # Base HTTP client with auth
-    │   ├── trading.py     # Buy/sell operations
+    │   ├── trading.py     # Order placement + ledger reconciliation
     │   └── earn.py        # Staking operations
     ├── notifications/
     │   └── telegram.py    # Telegram notifications
@@ -117,23 +124,33 @@ actions:
 
 | Type | Required fields | Optional |
 |------|-----------------|----------|
-| `order` | `pair`, `side`, `amount` | `order_type` (default: `market`) |
-| `earn` | `asset`, `strategy` | `amount` (default: `null` = all) |
+| `order` | `pair`, `side` | `amount` (null/omit = full balance of the relevant side), `order_type` (default: `market`) |
+| `earn` | `asset`, `strategy` | `amount` (null/omit = stake all available) |
 | `check_runway` | `days` | — |
 
 **Order notifications (buys vs. sells):**
 
-Buy orders use `oflags=viqc,fcib` (volume in quote currency, fee in base), so the fee is deducted from the bought asset. The Telegram notification reports the **net post-fee volume** and the **effective per-unit price** (`cost / net_volume`), not the gross market price:
+All filled-order values come from Kraken's `/0/private/Ledgers` endpoint — the bot reads the precise gross and fee for each side of the trade (no approximations) and formats accordingly.
+
+Buy orders use `oflags=viqc,fcib` (volume in quote currency, fee deducted from the bought base asset):
 
 ```
 ✔️ Buy SOL: buy 0.25819917 SOL for 25.00 USDC @ 96.85 USDC/SOL
-                ^^^^^^^^^^^^^^                  ^^^^^^^^^^^^^^
-                net SOL credited                effective price (cost / net_vol)
+                ^^^^^^^^^^^^^^      ^^^^^^^^^      ^^^^^^^^^^^^^
+                net base credited   gross quote    effective price
+                (gross - fee_base)  paid           (gross_quote / net_base)
 ```
 
-Sell orders report gross volume and gross market price — fee is taken from the quote side, so `vol_exec` already matches the base that left the balance.
+Sell orders use the default oflags (fee deducted from the quote proceeds):
 
-**Note:** For `fcib` buys, the fee is deducted from the **base** asset on the ledger, but Kraken's `QueryOrders` response reports the `fee` field in **quote currency** — two views of the same fee. To compute the net base credited (matching the ledger), `_format` does `vol_exec - fee / price`.
+```
+✔️ Sell SOL: sell 0.27421301 SOL for 24.90 USD @ 90.80 USD/SOL
+                  ^^^^^^^^^^^^^^      ^^^^^^^      ^^^^^^^^^^^^
+                  gross base sold     net quote    effective price
+                                      received     (net_quote / gross_base)
+```
+
+The receiving side is always reported **net of its fee** (matching the credit/debit on the ledger), and the effective price uses the same net side, so `price × volume` reconciles to the gross paid/received.
 
 **Earn strategies:**
 
