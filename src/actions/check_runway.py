@@ -32,14 +32,19 @@ class CheckRunwayAction(Action):
 
         by_quote = await upcoming_buys_by_quote(ctx.settings.actions, ctx.kraken_client, now, end)
         balance = await ctx.kraken_client.get_balance()
-        earn_by_asset = await ctx.earn.get_allocations_by_asset()
+        # Bonded/vault allocations are excluded for now — Kraken Vault is read-only
+        # via API (Allocate/Deallocate rejected with "access restricted"), so the
+        # bot can't auto-unstake when runway is short. Counting it as available
+        # would falsely report "ok" when manual UI unstaking is actually required.
+        # earn_by_asset = await ctx.earn.get_allocations_by_asset()
 
         lines: list[RunwayLine] = []
         for quote, items in by_quote.items():
             spot = await ctx.kraken_client.get_asset_balance(quote, balance)
-            earn = sum(
-                earn_by_asset.get(variant, 0.0) for variant in (quote, f"X{quote}", f"Z{quote}")
-            )
+            earn = 0.0
+            # earn = sum(
+            #     earn_by_asset.get(variant, 0.0) for variant in (quote, f"X{quote}", f"Z{quote}")
+            # )
             lines.append(
                 RunwayLine(
                     quote=quote,
@@ -61,9 +66,9 @@ def _format(days: int, lines: list[RunwayLine], all_ok: bool) -> str:
     out = [f"{days}d runway {'ok' if all_ok else 'low'}", "Balance"]
     for line in lines:
         cmp = ">" if line.ok else "<"
-        out.append(f"    {line.total:.2f} {line.quote} {cmp} {line.required:.2f} {line.quote}")
+        out.append(f"  {line.total:.2f} {line.quote} {cmp} {line.required:.2f} {line.quote}")
     out.append("Actions")
     for line in lines:
         for n, amt, c in line.items:
-            out.append(f"    {n}: {c} x {amt:.2f} {line.quote} = {amt * c:.2f} {line.quote}")
+            out.append(f"  {n}: {c} x {amt:.2f} {line.quote} = {amt * c:.2f} {line.quote}")
     return "\n".join(out)
