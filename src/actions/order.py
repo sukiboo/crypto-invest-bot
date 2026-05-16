@@ -6,7 +6,7 @@ from src.schemas import ActionConfig
 
 
 class OrderAction(Action):
-    async def execute(self, config: ActionConfig, ctx: ActionContext) -> str:
+    async def execute(self, config: ActionConfig, ctx: ActionContext) -> str | None:
         if config.order_type != "market":
             raise ValueError(f"Unsupported order type: {config.order_type}")
         assert config.pair is not None
@@ -15,14 +15,14 @@ class OrderAction(Action):
             side=config.side,
             amount=config.amount,
         )
+        if order_result is None:
+            return None
         return await _format(config, order_result, ctx.trading)
 
 
 async def _format(
     config: ActionConfig, order_result: dict[str, Any], trading: KrakenTrading
 ) -> str:
-    if not order_result:
-        return f"skipped {config.pair}: no quote balance"
     assert config.pair is not None
     base, quote = await trading.client.get_pair_symbols(config.pair)
     filled = await trading.get_filled_order(order_result.get("txid", []), config.side)

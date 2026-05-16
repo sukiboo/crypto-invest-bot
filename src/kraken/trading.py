@@ -36,16 +36,18 @@ class KrakenTrading:
         pair: str,
         side: OrderSide,
         amount: float | None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | None:
         # amount is quote-denominated for buys, base-denominated for sells.
         # amount=None means "use the full balance of the relevant side".
+        # Returns None to signal "skipped: nothing to spend/sell" (distinct from any
+        # other empty/malformed API response, which still surfaces as an error).
         if amount is None:
             base, quote = await self.client.get_pair_symbols(pair)
             asset = quote if side == "buy" else base
             amount = await self.client.get_asset_balance(asset)
             if amount <= 0:
                 logger.info("Skipping %s %s: %s balance is 0", pair, side, asset)
-                return {}
+                return None
             logger.info("Full-balance %s on %s: %s %s", side, pair, amount, asset)
 
         data: dict[str, Any] = {
