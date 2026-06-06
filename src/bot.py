@@ -1,11 +1,12 @@
 import asyncio
 import logging
 import signal
+from datetime import time
 
 from src.actions import ACTIONS, ActionContext
 from src.kraken import KrakenClient, KrakenEarn, KrakenTrading
 from src.notifications import TelegramNotifier
-from src.scheduler import JobScheduler
+from src.scheduler import JobScheduler, describe_schedule
 from src.schemas import ActionConfig
 from src.utils.settings import Settings
 
@@ -62,13 +63,33 @@ class CryptoInvestBot:
             self.scheduler.add_action(action, self.execute_action)
 
         self.scheduler.start()
-        next_runs = self.scheduler.get_next_run_times()
-        schedule_info = "\n".join(f"  - {name}: {time}" for name, time in next_runs.items())
+        schedule_info = await self._format_schedule()
         logger.info("Scheduled actions:\n%s", schedule_info)
 
         await self.telegram.send_info(
-            f"{self.settings.bot_name} started with {len(self.settings.actions)} actions"
+            f"{self.settings.bot_name} started with {len(self.settings.actions)} actions:\n"
+            f"{schedule_info}"
         )
+
+    async def _format_schedule(self) -> str:
+        next_runs = self.scheduler.get_next_run_times()
+        entries = [
+            (describe_schedule(a.schedule, next_runs.get(a.name)), next_runs.get(a.name), a)
+            for a in self.settings.actions
+        ]
+        # Order by clock time of day; interval jobs (every Nm/Nh) have none, so list them last.
+        entries.sort(key=lambda e: (e[0].startswith("every "), e[1].time() if e[1] else time.max))
+
+        lines = []
+        for cadence, _, action in entries:
+            try:
+                detail = await ACTIONS[action.type].summary(action, self.ctx)
+            except Exception as e:
+                logger.warning("Could not summarize action '%s': %s", action.name, e)
+                detail = ""
+            suffix = f" @ {detail}" if detail else ""
+            lines.append(f"- {cadence} | {action.name}{suffix}")
+        return "\n".join(lines)
 
     async def run(self) -> None:
         self._setup_signal_handlers()

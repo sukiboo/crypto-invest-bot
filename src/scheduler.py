@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -8,6 +9,30 @@ from apscheduler.triggers.cron import CronTrigger
 from src.schemas import ActionConfig
 
 logger = logging.getLogger(__name__)
+
+CRON_DOW = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun"}
+
+
+def describe_schedule(cron: str, next_run: datetime | None = None) -> str:
+    """Compact human cadence for a cron expression (e.g. 'daily 15:47', 'Mon 09:00',
+    'every 15m'). Falls back to the next run time, then to the raw cron, so the label
+    is never misleading for shapes the simplifier doesn't recognize."""
+    m, h, dom, mon, dow = cron.split()
+    if m.startswith("*/") and (h, dom, mon, dow) == ("*", "*", "*", "*"):
+        return f"every {m[2:]}m"
+    if h.startswith("*/") and m.isdigit() and (dom, mon, dow) == ("*", "*", "*"):
+        return f"every {h[2:]}h"
+    if m.isdigit() and h.isdigit():
+        t = f"{int(h):02d}:{int(m):02d}"
+        if (dom, mon, dow) == ("*", "*", "*"):
+            return f"daily {t}"
+        if dow.isdigit() and int(dow) in CRON_DOW and (dom, mon) == ("*", "*"):
+            return f"{CRON_DOW[int(dow)]} {t}"
+        if dom.isdigit() and (mon, dow) == ("*", "*"):
+            return f"day {int(dom)} {t}"
+    if next_run is not None:
+        return f"next {next_run:%b %d %H:%M}"
+    return cron
 
 
 class JobScheduler:
@@ -52,9 +77,5 @@ class JobScheduler:
             self.scheduler.shutdown(wait=wait)
             logger.info("Scheduler shutdown")
 
-    def get_next_run_times(self) -> dict[str, str]:
-        result = {}
-        for job in self.scheduler.get_jobs():
-            next_run = job.next_run_time
-            result[job.name] = next_run.isoformat() if next_run else "not scheduled"
-        return result
+    def get_next_run_times(self) -> dict[str, datetime | None]:
+        return {job.name: job.next_run_time for job in self.scheduler.get_jobs()}

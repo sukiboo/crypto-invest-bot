@@ -19,6 +19,12 @@ class OrderAction(Action):
             return None
         return await _format(config, order_result, ctx.trading)
 
+    async def summary(self, config: ActionConfig, ctx: ActionContext) -> str:
+        assert config.pair is not None
+        base, quote = await ctx.trading.client.get_pair_symbols(config.pair)
+        unit = quote if config.side == "buy" else base
+        return f"{config.amount:g} {unit}" if config.amount is not None else f"full {unit}"
+
 
 async def _format(
     config: ActionConfig, order_result: dict[str, Any], trading: KrakenTrading

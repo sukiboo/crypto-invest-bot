@@ -22,3 +22,7 @@ class Action(ABC):
 
     @abstractmethod
     async def execute(self, config: ActionConfig, ctx: ActionContext) -> str | None: ...
+
+    async def summary(self, config: ActionConfig, ctx: ActionContext) -> str:
+        """Short detail shown next to the action in the startup schedule. Empty = no detail."""
+        return ""

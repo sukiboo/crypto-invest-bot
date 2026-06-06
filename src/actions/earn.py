@@ -12,3 +12,6 @@ class EarnAction(Action):
         )
         amount = data.get("amount") if data else None
         return f"{config.strategy} {amount or '??'} {config.asset}"
+
+    async def summary(self, config: ActionConfig, ctx: ActionContext) -> str:
+        return config.strategy or ""

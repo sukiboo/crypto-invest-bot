@@ -59,6 +59,9 @@ class CheckRunwayAction(Action):
         await ctx.telegram.send_alert(_format(days, lines, all_ok), quiet=all_ok)
         return None
 
+    async def summary(self, config: ActionConfig, ctx: ActionContext) -> str:
+        return f"{config.days}d"
+
 
 def _format(days: int, lines: list[RunwayLine], all_ok: bool) -> str:
     if not lines:
