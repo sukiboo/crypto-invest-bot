@@ -112,7 +112,7 @@ actions:
     type: earn
     schedule: "0 12 * * *"
     asset: ETH
-    strategy: flexible
+    strategy: bonded
 """
         )
         return config_file

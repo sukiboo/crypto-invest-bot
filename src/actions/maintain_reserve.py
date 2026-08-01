@@ -39,10 +39,7 @@ class MaintainReserveAction(Action):
         strategy_type = config.strategy
         assert asset is not None and days is not None and strategy_type is not None
 
-        strategy = await ctx.earn.find_strategy(asset, strategy_type)
-        if not strategy:
-            raise ValueError(f"No matching '{strategy_type}' strategy for {asset}")
-        strategy_id = strategy["id"]
+        strategy_id = (await ctx.earn.find_strategy(asset, strategy_type))["id"]
 
         now = datetime.now(timezone.utc)
         end = now + timedelta(days=days)

@@ -84,7 +84,7 @@ class TestCheckRunwayAction:
                 type="earn",
                 schedule="0 12 * * *",
                 asset="ETH",
-                strategy="flexible",
+                strategy="bonded",
             ),
         ]
         ctx.kraken_client.get_asset_balance.return_value = 10_000.0
@@ -102,7 +102,7 @@ class TestCheckRunwayAction:
                 type="earn",
                 schedule="0 12 * * *",
                 asset="ETH",
-                strategy="flexible",
+                strategy="bonded",
             ),
         ]
 

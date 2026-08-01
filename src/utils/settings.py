@@ -41,13 +41,13 @@ class Settings:
             for action in self.actions:
                 if action.type == "order" and action.pair not in valid_pairs:
                     errors.append(f"'{action.name}': invalid pair '{action.pair}'")
-                elif action.type == "earn" and action.asset:
-                    strategy = await earn.find_strategy(action.asset, action.strategy)
-                    if not strategy:
-                        errors.append(
-                            f"'{action.name}': no '{action.strategy}' strategy for '{action.asset}'"
-                        )
-                    elif action.asset not in balance:
+                elif action.type == "earn" and action.asset and action.strategy:
+                    try:
+                        await earn.find_strategy(action.asset, action.strategy)
+                    except ValueError as e:
+                        errors.append(f"'{action.name}': {e}")
+                        continue
+                    if action.asset not in balance:
                         balance_key = earn._find_balance_key(action.asset, balance)
                         if balance_key:
                             errors.append(

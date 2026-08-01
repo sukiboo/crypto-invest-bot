@@ -107,7 +107,7 @@ actions:
   - name: "Stake ETH"
     type: earn
     asset: XETH
-    strategy: restaked
+    strategy: bonded
     amount: null  # null = stake all available
     schedule: "1 12 * * *"
 
@@ -154,14 +154,26 @@ The receiving side is always reported **net of its fee** (matching the credit/de
 
 **Earn strategies:**
 
-Available strategies depend on the asset and are determined by querying Kraken's API.
-The bot maps strategy names to Kraken's lock types:
+Available strategies depend on the asset and are determined by querying Kraken's API. Only
+strategies Kraken reports as `can_allocate` are eligible. `strategy` takes one of two forms:
 
-- `flexible` -- **Flexible staking**: Maps directly to Kraken's "flexible" staking strategy. No lock period, withdraw anytime. Lower rewards but maximum liquidity. Also known as "Auto Earn" or "Flexible Opt-In Rewards" in Kraken's UI.
-- `bonded` -- **Bonded staking**: Maps to Kraken's "bonded" staking strategy with the shortest unbonding period. For most coins, this is the only bonded option available. Assets are locked during the bonding period, then have an unbonding period before funds become available. Higher rewards than `flexible`.
-- `restaked` -- **Bonded restaking**: Maps to Kraken's "bonded" staking strategy with the longest unbonding period. For most coins, this will be the same strategy as `bonded` (since they only have one bonded option). For assets like ETH that support restaking, this selects the restaking option with the longest lock period. Highest rewards available, but longest commitment with extended unbonding periods.
+- `bonded` -- **Bonded staking**: funds are locked, with an unbonding period (3-14 days depending on the asset) before they return to spot. Roughly 2× the unlocked rate. Resolves to the asset's single allocatable bonded strategy.
+- `ESPB45U-RZV2F-T6UO3H` -- an **explicit strategy id**, which reaches any allocatable strategy regardless of lock type. Use it to pin a specific pool, or when `bonded` is ambiguous. Validated at startup against the asset's allocatable strategies.
 
-**Note:** Lock periods and unbonding periods vary by asset. Most coins only offer `flexible` and `bonded` options. Only certain assets like ETH offer a separate restaking option. Check Kraken's [Earn documentation](https://support.kraken.com/hc/articles/360044886311-overview-of-opt-in-rewards-on-kraken) for specific details per asset. For most assets `restaked` will map to `bonded`.
+**Note:** not every asset offers bonded staking -- of the 33 assets with earn strategies, 24
+do; ADA, MINA and TAO are instant-only, and 7 (USDC, USDG, RLUSD, SN*) are flex-only. Invalid
+combinations are rejected at startup with the asset's actual options listed.
+
+Kraken's other two lock types are deliberately not keywords:
+
+- `flex` is never allocatable (all 33 report `can_allocate: false`). Kraken auto-allocates idle spot into it and still reports the balance as spendable, so those assets already earn with no action at all. Scheduling one fails at startup telling you to remove it.
+- `instant` pays **exactly the flex rate on all 24 assets that offer it** — so allocating to it earns what the coin already earns sitting idle, while making the balance unspendable until deallocated. It is strictly worse than doing nothing, so it gets no keyword. It remains reachable by explicit id if you want it anyway (e.g. with account-level auto-earn switched off).
+
+If two allocatable strategies ever share a lock type, the bot refuses to guess and asks you to
+name the id. This is what would have caught the ETH restaking deprecation: `restaked` (a former
+value meaning "the bonded strategy with the longest unbonding period") silently resolved to
+Kraken's EigenLayer pool, which was closed to new allocations on 2026-07-30 while remaining
+visible in the API.
 
 **Cash runway check:**
 

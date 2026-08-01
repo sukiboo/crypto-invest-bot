@@ -12,7 +12,7 @@ ASSET_PATTERN = re.compile(r"^[A-Z0-9]{2,6}$")
 ActionType = Literal["order", "earn", "check_runway", "maintain_reserve"]
 OrderType = Literal["market", "limit"]
 OrderSide = Literal["buy", "sell"]
-EarnLockType = Literal["flexible", "bonded", "restaked"]
+EarnLockType = Literal["bonded"]
 
 
 class EnvSettings(BaseSettings):
@@ -39,7 +39,7 @@ class ActionConfig(BaseModel):
 
     # For earn actions
     asset: str | None = None  # exact Kraken asset name, e.g. "ETH", "XBT"
-    strategy: EarnLockType | None = None
+    strategy: str | None = None  # EarnLockType, or an explicit Kraken strategy id
 
     # For check_runway actions
     days: int | None = None  # lookahead horizon in days

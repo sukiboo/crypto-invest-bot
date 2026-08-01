@@ -1,10 +1,25 @@
 import logging
-from typing import Any
+from typing import Any, get_args
 
 from src.kraken.client import KrakenClient
 from src.schemas import EarnLockType
 
 logger = logging.getLogger(__name__)
+
+LOCK_TYPES = frozenset(get_args(EarnLockType))
+
+
+def _lock_type(strategy: dict[str, Any]) -> str:
+    return strategy.get("lock_type", {}).get("type", "")
+
+
+def _describe(strategies: list[dict[str, Any]]) -> str:
+    def one(strategy: dict[str, Any]) -> str:
+        unbonding = strategy.get("lock_type", {}).get("unbonding_period", 0)
+        window = f" {unbonding / 86400:g}d" if unbonding else ""
+        return f"{_lock_type(strategy)}{window} ({strategy['id']})"
+
+    return ", ".join(one(s) for s in strategies)
 
 
 class KrakenEarn:
@@ -23,37 +38,42 @@ class KrakenEarn:
         result = await self.client._request("/0/private/Earn/Strategies", data)
         return result.get("items", [])
 
-    async def find_strategy(
-        self, asset: str, strategy_type: EarnLockType | None = None
-    ) -> dict[str, Any] | None:
+    async def find_strategy(self, asset: str, strategy: str) -> dict[str, Any]:
         strategies = await self.get_strategies(asset)
         if not strategies:
-            logger.warning("No earn strategies found for %s", asset)
-            return None
-        if strategy_type is None:
-            return strategies[0]
+            raise ValueError(f"no earn strategies exist for {asset}")
 
-        def lock(s: dict[str, Any]) -> str:
-            return s.get("lock_type", {}).get("type", "")
+        allocatable = [s for s in strategies if s.get("can_allocate")]
+        if not allocatable:
+            offered = ", ".join(sorted({_lock_type(s) for s in strategies}))
+            raise ValueError(
+                f"{asset} has no allocatable strategy (offers only: {offered}) -- Kraken "
+                "auto-allocates idle spot to flex, so remove this action"
+            )
 
-        def unbonding(s: dict[str, Any]) -> float:
-            return s.get("lock_type", {}).get("unbonding_period", 0)
+        if strategy not in LOCK_TYPES:
+            match = next((s for s in allocatable if s["id"] == strategy), None)
+            if match:
+                return match
+            if any(s["id"] == strategy for s in strategies):
+                raise ValueError(f"strategy {strategy} is closed to new allocations for {asset}")
+            raise ValueError(
+                f"unknown strategy '{strategy}' for {asset} "
+                f"-- allocatable: {_describe(allocatable)}"
+            )
 
-        # "bonded" = shortest unbonding; "restaked" = longest (ETH's restaking option).
-        # For most assets only one bonded strategy exists, so min == max.
-        if strategy_type in ("bonded", "restaked"):
-            bonded = [s for s in strategies if lock(s) == "bonded"]
-            if not bonded:
-                logger.warning("No bonded strategies found for %s", asset)
-                return None
-            pick = max if strategy_type == "restaked" else min
-            return pick(bonded, key=unbonding)
-
-        # "flexible" (user-facing) maps to Kraken's "flex" lock type.
-        flex = next((s for s in strategies if lock(s) == "flex"), None)
-        if flex is None:
-            logger.warning("No flexible strategies found for %s", asset)
-        return flex
+        matches = [s for s in allocatable if _lock_type(s) == strategy]
+        if not matches:
+            raise ValueError(
+                f"no allocatable '{strategy}' strategy for {asset} "
+                f"-- available: {_describe(allocatable)}"
+            )
+        if len(matches) > 1:
+            raise ValueError(
+                f"{asset} has {len(matches)} allocatable '{strategy}' strategies "
+                f"-- set one explicitly: {_describe(matches)}"
+            )
+        return matches[0]
 
     async def allocate(self, strategy_id: str, amount: float, asset: str) -> dict[str, Any]:
         logger.info("Allocating %s %s to strategy %s", amount, asset, strategy_id)
@@ -72,15 +92,14 @@ class KrakenEarn:
         return await self.client._request("/0/private/Earn/Allocations")
 
     async def get_allocations_by_asset(self) -> dict[str, float]:
-        # Flexible (auto-flex) allocations are skipped because Kraken already reports
-        # their balance as spendable in /Balance, so counting them again double-counts.
+        # flex allocations already reported as spendable in /Balance
         strategies = await self.get_strategies()
-        flexible_ids = {s["id"] for s in strategies if s.get("lock_type", {}).get("type") == "flex"}
+        flex_ids = {s["id"] for s in strategies if s.get("lock_type", {}).get("type") == "flex"}
 
         by_asset: dict[str, float] = {}
         for item in (await self.get_allocations()).get("items", []):
             asset = item.get("native_asset")
-            if not asset or item.get("strategy_id") in flexible_ids:
+            if not asset or item.get("strategy_id") in flex_ids:
                 continue
             total = float(item.get("amount_allocated", {}).get("total", {}).get("native") or 0)
             if total > 0:
@@ -108,13 +127,10 @@ class KrakenEarn:
     async def stake_asset(
         self,
         asset: str,
+        strategy: str,
         amount: float | None = None,
-        strategy_type: EarnLockType | None = None,
     ) -> dict[str, Any] | None:
-        strategy = await self.find_strategy(asset, strategy_type)
-        if not strategy:
-            logger.warning("Cannot stake %s: no matching strategy found", asset)
-            return None
+        matched = await self.find_strategy(asset, strategy)
 
         if amount is None:
             amount = await self.client.get_asset_balance(asset)
@@ -123,5 +139,5 @@ class KrakenEarn:
                 return None
             logger.info("Staking all available %s: %s", asset, amount)
 
-        await self.allocate(strategy["id"], amount, asset)
+        await self.allocate(matched["id"], amount, asset)
         return {"amount": amount}

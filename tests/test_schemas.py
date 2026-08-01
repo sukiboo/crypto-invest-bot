@@ -51,10 +51,10 @@ class TestActionConfig:
             type="earn",
             schedule="0 12 * * *",
             asset="ETH",
-            strategy="flexible",
+            strategy="bonded",
         )
         assert action.asset == "ETH"
-        assert action.strategy == "flexible"
+        assert action.strategy == "bonded"
 
     def test_earn_action_requires_asset(self):
         with pytest.raises(ValidationError, match="'asset' is required"):
@@ -62,7 +62,7 @@ class TestActionConfig:
                 name="Stake ETH",
                 type="earn",
                 schedule="0 12 * * *",
-                strategy="flexible",
+                strategy="bonded",
             )
 
     def test_earn_action_requires_strategy(self):
@@ -80,7 +80,7 @@ class TestActionConfig:
             type="earn",
             schedule="0 12 * * *",
             asset="ETH",
-            strategy="flexible",
+            strategy="bonded",
             amount=None,
         )
         assert action.amount is None
@@ -92,7 +92,7 @@ class TestActionConfig:
                 type="earn",
                 schedule="0 12 * * *",
                 asset="ETH",
-                strategy="flexible",
+                strategy="bonded",
                 amount=-10.0,
             )
 
