@@ -61,7 +61,8 @@ class TestPlaceMarketOrder:
 
         result = await trading.place_market_order(pair="ETHUSD", side="buy", amount=None)
 
-        assert result == {}
+        # None signals "skipped", which OrderAction turns into a silent no-op.
+        assert result is None
         mock_kraken_client._request.assert_not_called()
 
 

@@ -138,12 +138,14 @@ class TestCheckRunwayAction:
         assert match is not None
         assert 13 <= int(match.group(1)) <= 14
 
-    async def test_earn_balance_counts_toward_available(self, ctx, runway_action):
+    async def test_earn_balance_does_not_count_toward_available(self, ctx, runway_action):
+        # The earn term is disabled while Kraken Vault is read-only via API, so the bot
+        # can't auto-unstake to cover a shortfall. Spot alone ($50) must decide, and the
+        # $5000 allocation is ignored -- see CheckRunwayAction. Re-enabling it flips this.
         ctx.settings.actions = [_buy("Buy ETH", 100.0)]
-        # Spot only $50 (less than 7*100 required), but earn allocations cover the rest
         ctx.kraken_client.get_asset_balance.return_value = 50.0
         ctx.earn.get_allocations_by_asset.return_value = {"ZUSD": 5_000.0}
 
         await CheckRunwayAction().execute(runway_action, ctx)
 
-        assert ctx.telegram.send_alert.call_args.kwargs["quiet"] is True
+        assert ctx.telegram.send_alert.call_args.kwargs["quiet"] is False

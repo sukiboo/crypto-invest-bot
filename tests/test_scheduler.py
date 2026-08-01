@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 
 from src.scheduler import JobScheduler
@@ -51,14 +53,14 @@ class TestAddAction:
 
 
 class TestGetNextRunTimes:
-    async def test_returns_iso_formatted_times(self, scheduler, sample_action):
+    async def test_returns_datetimes(self, scheduler, sample_action):
         scheduler.add_action(sample_action, dummy_callback)
         scheduler.start()
 
         next_runs = scheduler.get_next_run_times()
 
         assert "Buy ETH" in next_runs
-        # Should be ISO format string
-        assert "T" in next_runs["Buy ETH"]
+        # bot._format_schedule sorts on .time(), so these must stay datetimes.
+        assert isinstance(next_runs["Buy ETH"], datetime)
 
         scheduler.shutdown()
